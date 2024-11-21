@@ -175,7 +175,7 @@ export PEPSOptimize, GeomSum, ManualIter, LinSolver
 export fixedpoint
 
 export absorb_wt
-export su_iter!, simpleupdate!
+export su_iter, simpleupdate
 export fu_iter!, fullupdate!
 export meas_site, meas_bond
 export calrho_site, calrho_bondx, calrho_bondy, calrho_all
