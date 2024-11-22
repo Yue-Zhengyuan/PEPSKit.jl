@@ -265,12 +265,9 @@ function fu_optimize(
     maxiter::Int=50,
     maxdiff::Float64=1e-15,
     check_int::Int=1,
-    verbose::Bool=false,
 )
-    if verbose
-        println("---- Iterative optimization ----")
-        @printf("%-6s%12s%12s%12s %10s\n", "Step", "Cost", "ϵ_d", "ϵ_ab", "Time/s")
-    end
+    @debug "---- Iterative optimization ----\n"
+    @debug @sprintf("%-6s%12s%12s%12s %10s\n", "Step", "Cost", "ϵ_d", "ϵ_ab", "Time/s")
     aR, bL = deepcopy(aR0), deepcopy(bL0)
     time0 = time()
     cost00 = cost_func(env, aR, bL, aR2bL2)
@@ -278,14 +275,10 @@ function fu_optimize(
     cost0, fid0 = cost00, fid00
     # no need to further optimize
     if abs(cost0) < 5e-15
-        if verbose
-            time1 = time()
-            println(
-                @sprintf(
-                    "%-6d%12.3e%12.3e%12.3e %10.3f\n", 0, cost0, NaN, NaN, time1 - time0
-                )
-            )
-        end
+        time1 = time()
+        @debug @sprintf(
+            "%-6d%12.3e%12.3e%12.3e %10.3f\n", 0, cost0, NaN, NaN, time1 - time0
+        )
         return aR, bL, cost0
     end
     for count in 1:maxiter
@@ -301,8 +294,8 @@ function fu_optimize(
         diff_d = abs(cost - cost0) / cost00
         diff_ab = abs(fid - fid0) / fid00
         time1 = time()
-        if verbose && (count == 1 || count % check_int == 0)
-            @printf(
+        if (count == 1 || count % check_int == 0)
+            @debug @sprintf(
                 "%-6d%12.3e%12.3e%12.3e %10.3f\n",
                 count,
                 cost,
@@ -317,7 +310,7 @@ function fu_optimize(
         aR0, bL0 = deepcopy(aR), deepcopy(bL)
         cost0, fid0 = cost, fid
         if count == maxiter
-            println("Warning: max iter $maxiter reached for optimization")
+            @warn "Warning: max iter $maxiter reached for ALS optimization\n"
         end
     end
     return aR, bL, cost0

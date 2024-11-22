@@ -16,7 +16,7 @@ CTMRG left-move to update CTMRGEnv in the c-th column
     c-1  c 
 ```
 """
-function ctmrg_leftmove!(
+function ctmrg_leftmove(
     col::Int,
     peps::InfinitePEPS,
     envs::CTMRGEnv,
@@ -25,13 +25,9 @@ function ctmrg_leftmove!(
     cheap::Bool=true,
 )
     trscheme = truncerr(svderr) & truncdim(chi)
-    alg = CTMRG(;
-        verbosity=0, miniter=1, maxiter=10, trscheme=trscheme, ctmrgscheme=:sequential
-    )
-    envs2, info = ctmrg_leftmove(col, peps, envs, alg)
-    envs.corners[:, :, col] = envs2.corners[:, :, col]
-    envs.edges[:, :, col] = envs2.edges[:, :, col]
-    return info
+    alg = CTMRG(; verbosity=0, trscheme=trscheme, ctmrgscheme=:sequential)
+    envs, info = ctmrg_leftmove(col, peps, envs, alg)
+    return envs, info
 end
 
 """
@@ -46,7 +42,7 @@ CTMRG right-move to update CTMRGEnv in the c-th column
         c   c+1
 ```
 """
-function ctmrg_rightmove!(
+function ctmrg_rightmove(
     col::Int,
     peps::InfinitePEPS,
     envs::CTMRGEnv,
@@ -56,10 +52,10 @@ function ctmrg_rightmove!(
 )
     Nr, Nc = size(peps)
     @assert 1 <= col <= Nc
-    PEPSKit.rot180!(envs)
-    ctmrg_leftmove!(Nc + 1 - col, rot180(peps), envs, chi, svderr)
-    PEPSKit.rot180!(envs)
-    return nothing
+    envs, info = ctmrg_leftmove(
+        Nc + 1 - col, rot180(peps), rot180(envs), chi, svderr; cheap=cheap
+    )
+    return rot180(envs), info
 end
 
 """
@@ -140,9 +136,7 @@ function update_column!(
         aR, s_cut, bL, ϵ = tsvd(aR2bL2, ((1, 2), (3, 4)); trunc=truncscheme)
         aR, bL = absorb_s(aR, s_cut, bL)
         # optimize aR, bL
-        aR, bL, cost = fu_optimize(
-            aR, bL, aR2bL2, env; maxiter=maxiter, maxdiff=maxdiff, verbose=false
-        )
+        aR, bL, cost = fu_optimize(aR, bL, aR2bL2, env; maxiter=maxiter, maxdiff=maxdiff)
         costs[row] = cost
         aR /= norm(aR, Inf)
         bL /= norm(bL, Inf)
@@ -167,8 +161,12 @@ function update_column!(
         end
     end
     # update CTMRGEnv
-    ctmrg_leftmove!(col, peps, envs, chi, svderr; cheap=cheap)
-    ctmrg_rightmove!(_next(col, Nc), peps, envs, chi, svderr; cheap=cheap)
+    envs2, info = ctmrg_leftmove(col, peps, envs, chi, svderr; cheap=cheap)
+    envs2, info = ctmrg_rightmove(_next(col, Nc), peps, envs2, chi, svderr; cheap=cheap)
+    for c in [col, _next(col, Nc)]
+        envs.corners[:, :, c] = envs2.corners[:, :, c]
+        envs.edges[:, :, c] = envs2.edges[:, :, c]
+    end
     return localfid, costs
 end
 
@@ -180,7 +178,7 @@ Otherwise, use full-infinite environment instead.
 
 Reference: Physical Review B 92, 035142 (2015)
 """
-function fu_iter!(
+function fu_iter(
     gate::AbstractTensorMap,
     peps::InfinitePEPS,
     envs::CTMRGEnv,
@@ -191,33 +189,32 @@ function fu_iter!(
 )
     Nr, Nc = size(peps)
     fid, maxcost = 0.0, 0.0
+    peps2, envs2 = deepcopy(peps), deepcopy(envs)
     for col in 1:Nc
         tmpfid, costs = update_column!(
-            col, gate, peps, envs, Dcut, chi; svderr=svderr, cheap=cheap
+            col, gate, peps2, envs2, Dcut, chi; svderr=svderr, cheap=cheap
         )
         fid += tmpfid
         maxcost = max(maxcost, maximum(costs))
     end
-    rotr90!(peps)
-    rotr90!(envs)
+    peps2, envs2 = rotr90(peps2), rotr90(envs2)
     for row in 1:Nr
         tmpfid, costs = update_column!(
-            row, gate, peps, envs, Dcut, chi; svderr=svderr, cheap=cheap
+            row, gate, peps2, envs2, Dcut, chi; svderr=svderr, cheap=cheap
         )
         fid += tmpfid
         maxcost = max(maxcost, maximum(costs))
     end
-    rotl90!(peps)
-    rotl90!(envs)
+    peps2, envs2 = rotl90(peps2), rotl90(envs2)
     fid /= (2 * Nr * Nc)
-    return fid, maxcost
+    return peps2, envs2, (fid, maxcost)
 end
 
 # TODO: pass Hamiltonian gate as `LocalOperator` 
 """
 Perform full update
 """
-function fullupdate!(
+function fullupdate(
     peps::InfinitePEPS,
     envs::CTMRGEnv,
     ham::AbstractTensorMap,
@@ -259,14 +256,13 @@ function fullupdate!(
     diff_energy = 0.0
     for count in 1:evolstep
         time0 = time()
-        fid, cost = fu_iter!(gate, peps, envs, Dcut, chi, svderr; cheap=cheap)
+        peps, envs, (fid, cost) = fu_iter(gate, peps, envs, Dcut, chi, svderr; cheap=cheap)
         time1 = time()
         if count == 1 || count % rgint == 0
             meast0 = time()
             # reconverge `env` (in place)
             println(stderr, "---- FU step $count: reconverging envs ----")
-            envs2 = leading_boundary(envs, peps, ctm_alg)
-            envs.edges[:], envs.corners[:] = envs2.edges, envs2.corners
+            envs = leading_boundary(envs, peps, ctm_alg)
             # TODO: monitor energy with costfun
             # esite = costfun(peps, envs, ham)
             rho2sss = calrho_allnbs(envs, peps)
@@ -289,8 +285,7 @@ function fullupdate!(
             if diff_energy > 0
                 @printf("Energy starts to increase. Abort evolution.\n")
                 # restore peps and envs at last checking
-                peps.A[:] = peps0.A
-                envs.corners[:], envs.edges[:] = envs0.corners, envs0.edges
+                peps, envs = peps0, envs0
                 break
             end
             esite0, peps0, envs0 = esite, deepcopy(peps), deepcopy(envs)
@@ -300,7 +295,7 @@ function fullupdate!(
     for io in (stdout, stderr)
         @printf(io, "Reconverging final envs ... \n")
     end
-    envs2 = leading_boundary(
+    envs = leading_boundary(
         envs,
         peps,
         CTMRG(;
@@ -313,9 +308,8 @@ function fullupdate!(
             ctmrgscheme=ctmrgscheme,
         ),
     )
-    envs.edges[:], envs.corners[:] = envs2.edges, envs2.corners
     time_end = time()
     @printf("Evolution time: %.3f s\n\n", time_end - time_start)
     print(stderr, "\n----------\n\n")
-    return esite0, diff_energy
+    return peps, envs, (esite0, diff_energy)
 end

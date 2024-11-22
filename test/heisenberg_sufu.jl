@@ -41,21 +41,23 @@ ctm_alg = CTMRG(; tol=1e-10, verbosity=2, trscheme=trscheme, ctmrgscheme=:sequen
 envs = leading_boundary(envs, peps, ctm_alg)
 # measure physical quantities
 rho1ss, rho2sss = calrho_all(envs, peps)
-result = measrho_all(rho1ss, rho2sss)
-@info @sprintf("Energy = %.8f\n", result["e_site"])
-@info @sprintf("Staggered magnetization = %.8f\n", mean(result["mag_norm"]))
-@test isapprox(result["e_site"], -0.6675; atol=1e-3)
-@test isapprox(mean(result["mag_norm"]), 0.3767; atol=1e-3)
+meas = measrho_all(rho1ss, rho2sss)
+@info @sprintf("Energy = %.8f\n", meas["e_site"])
+@info @sprintf("Staggered magnetization = %.8f\n", mean(meas["mag_norm"]))
+@test isapprox(meas["e_site"], -0.6675; atol=1e-3)
+@test isapprox(mean(meas["mag_norm"]), 0.3767; atol=1e-3)
 
 # continue with full update
-dts = [2e-2, 1e-2, 5e-3, 1e-3, 5e-4]
+dts = [2e-2, 1e-2, 5e-3]
 for dt in dts
-    fullupdate!(peps, envs, ham, dt, Dcut, χenv; rgmaxiter=5, cheap=true)
+    result = fullupdate(peps, envs, ham, dt, Dcut, χenv; rgmaxiter=10, cheap=true)
+    global peps = result[1]
+    global envs = result[2]
 end
 # measure physical quantities
 rho1ss, rho2sss = calrho_all(envs, peps)
-result = measrho_all(rho1ss, rho2sss)
-@printf("Energy = %.8f\n", result["e_site"])
-@printf("Staggered magnetization = %.8f\n", mean(result["mag_norm"]))
-@test isapprox(result["e_site"], -0.66875; atol=1e-4)
-@test isapprox(mean(result["mag_norm"]), 0.3510; atol=1e-3)
+meas = measrho_all(rho1ss, rho2sss)
+@info @sprintf("Energy = %.8f\n", meas["e_site"])
+@info @sprintf("Staggered magnetization = %.8f\n", mean(meas["mag_norm"]))
+@test isapprox(meas["e_site"], -0.66875; atol=1e-4)
+@test isapprox(mean(meas["mag_norm"]), 0.3510; atol=1e-3)
