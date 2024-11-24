@@ -65,7 +65,7 @@ To update rows, rotate the network clockwise by 90 degrees.
 """
 function update_column!(
     col::Int,
-    gate::AbstractTensorMap,
+    gate::LocalOperator,
     peps::InfinitePEPS,
     envs::CTMRGEnv,
     Dcut::Int,
@@ -131,7 +131,8 @@ function update_column!(
                 ↑           ↑
             -1← aR -← 3 -← bL → -4
         =#
-        aR2bL2 = ncon((gate, aR0, bL0), ([-2, -3, 1, 2], [-1, 1, 3], [3, 2, -4]))
+        term = get_gateterm(gate, (CartesianIndex(row, col), CartesianIndex(row, col + 1)))
+        aR2bL2 = ncon((term, aR0, bL0), ([-2, -3, 1, 2], [-1, 1, 3], [3, 2, -4]))
         # initialize truncated tensors using SVD truncation
         aR, s_cut, bL, ϵ = tsvd(aR2bL2, ((1, 2), (3, 4)); trunc=truncscheme)
         aR, bL = absorb_s(aR, s_cut, bL)
@@ -179,7 +180,7 @@ Otherwise, use full-infinite environment instead.
 Reference: Physical Review B 92, 035142 (2015)
 """
 function fu_iter(
-    gate::AbstractTensorMap,
+    gate::LocalOperator,
     peps::InfinitePEPS,
     envs::CTMRGEnv,
     Dcut::Int,
@@ -198,9 +199,10 @@ function fu_iter(
         maxcost = max(maxcost, maximum(costs))
     end
     peps2, envs2 = rotr90(peps2), rotr90(envs2)
+    gate_rotated = rotr90(gate)
     for row in 1:Nr
         tmpfid, costs = update_column!(
-            row, gate, peps2, envs2, Dcut, chi; svderr=svderr, cheap=cheap
+            row, gate_rotated, peps2, envs2, Dcut, chi; svderr=svderr, cheap=cheap
         )
         fid += tmpfid
         maxcost = max(maxcost, maximum(costs))
@@ -210,14 +212,13 @@ function fu_iter(
     return peps2, envs2, (fid, maxcost)
 end
 
-# TODO: pass Hamiltonian gate as `LocalOperator` 
 """
 Perform full update
 """
 function fullupdate(
     peps::InfinitePEPS,
     envs::CTMRGEnv,
-    ham::AbstractTensorMap,
+    ham::LocalOperator,
     dt::Float64,
     Dcut::Int,
     chi::Int;
@@ -251,7 +252,7 @@ function fullupdate(
         "speed",
         "meas(s)"
     )
-    gate = exp(-dt * ham)
+    gate = get_gate(dt, ham)
     esite0, peps0, envs0 = Inf, deepcopy(peps), deepcopy(envs)
     diff_energy = 0.0
     for count in 1:evolstep
@@ -263,11 +264,7 @@ function fullupdate(
             # reconverge `env` (in place)
             println(stderr, "---- FU step $count: reconverging envs ----")
             envs = leading_boundary(envs, peps, ctm_alg)
-            # TODO: monitor energy with costfun
-            # esite = costfun(peps, envs, ham)
-            rho2sss = calrho_allnbs(envs, peps)
-            ebonds = [collect(meas_bond(ham, rho2) for rho2 in rho2sss[n]) for n in 1:2]
-            esite = sum(sum(ebonds)) / (N1 * N2)
+            esite = costfun(peps, envs, ham) / (N1 * N2)
             meast1 = time()
             # monitor change of CTMRGEnv by its singular values
             diff_energy = esite - esite0

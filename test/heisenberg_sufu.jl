@@ -58,8 +58,8 @@ for dt in dts
     global envs = result[2]
 end
 # measure physical quantities
-rho1ss, rho2sss = calrho_all(envs, peps)
-meas = measrho_all(rho1ss, rho2sss)
+meas = measure_heis(peps, ham, envs)
+display(meas)
 @info @sprintf("Energy = %.8f\n", meas["e_site"])
 @info @sprintf("Staggered magnetization = %.8f\n", mean(meas["mag_norm"]))
 @test isapprox(meas["e_site"], -0.66875; atol=1e-4)
