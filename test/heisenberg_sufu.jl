@@ -7,8 +7,7 @@ import Statistics: mean
 include("utility/measure_heis.jl")
 import .MeasureHeis: measure_heis
 
-# benchmark data for D = 3 is from
-# Phys. Rev. B 94, 035133 (2016)
+# benchmark data is from Phys. Rev. B 94, 035133 (2016)
 
 # random initialization of 2x2 iPEPS with weights and CTMRGEnv (using real numbers)
 Dcut, χenv = 4, 16
@@ -33,7 +32,7 @@ for (n, (dt, tol)) in enumerate(zip(dts, tols))
     Dcut2 = (n == 1 ? Dcut + 1 : Dcut)
     trscheme = truncerr(1e-10) & truncdim(Dcut2)
     alg = SimpleUpdate(dt, tol, maxiter, trscheme)
-    result = PEPSKit._simpleupdate(peps, ham, alg; bipartite=false)
+    result = simpleupdate(peps, ham, alg; bipartite=false)
     global peps = result[1]
 end
 # absort weight into site tensors
@@ -53,8 +52,31 @@ display(meas)
 
 # continue with full update
 dts = [2e-2, 1e-2, 5e-3]
+trscheme_peps = truncerr(1e-10) & truncdim(Dcut)
+trscheme_envs = truncerr(1e-9) & truncdim(χenv)
+trscheme_envs_final = truncerr(1e-10) & truncdim(χenv)
+lrmove_alg = CTMRG(;
+    verbosity=0, maxiter=1, trscheme=trscheme_envs, ctmrgscheme=:sequential
+)
+reconv_alg = CTMRG(;
+    tol=1e-6, maxiter=10, verbosity=2, trscheme=trscheme_envs, ctmrgscheme=:sequential
+)
+ctm_alg = CTMRG(;
+    tol=1e-10,
+    maxiter=50,
+    verbosity=2,
+    trscheme=trscheme_envs_final,
+    ctmrgscheme=:sequential,
+)
 for dt in dts
-    result = fullupdate(peps, envs, ham, dt, Dcut, χenv; rgmaxiter=10, cheap=true)
+    fu_alg = FullUpdate(;
+        dt=dt,
+        maxiter=1000,
+        trscheme=trscheme_peps,
+        lrmove_alg=lrmove_alg,
+        reconv_alg=reconv_alg,
+    )
+    result = fullupdate(peps, envs, ham, fu_alg, ctm_alg)
     global peps = result[1]
     global envs = result[2]
 end

@@ -1,33 +1,21 @@
 include("fu_gaugefix.jl")
 include("fu_optimize.jl")
 
-# TODO: add option to use full-infinite environment 
-# for CTMRG moves when it is implemented in PEPSKit
-
 """
-CTMRG left-move to update CTMRGEnv in the c-th column 
-```
-    ---> absorb
-    C1 ← T1 ←   r-1
-    ↓    ‖
-    T4 = M' =   r
-    ↓    ‖
-    C4 → T3 →   r+1
-    c-1  c 
-```
+Algorithm struct for full update (FU) of infinite PEPS with bond weights/
+Each FU run stops when the energy starts to increase.
 """
-function ctmrg_leftmove(
-    col::Int,
-    peps::InfinitePEPS,
-    envs::CTMRGEnv,
-    chi::Int,
-    svderr::Float64=1e-9;
-    cheap::Bool=true,
-)
-    trscheme = truncerr(svderr) & truncdim(chi)
-    alg = CTMRG(; verbosity=0, trscheme=trscheme, ctmrgscheme=:sequential)
-    envs, info = ctmrg_leftmove(col, peps, envs, alg)
-    return envs, info
+@kwdef struct FullUpdate
+    dt::Float64
+    maxiter::Int
+    fixgauge::Bool = true
+    trscheme::TensorKit.TruncationScheme
+    opt_alg::FUALSOptimize = FUALSOptimize()
+    # CTMRG for left-right move
+    lrmove_alg::SequentialCTMRG
+    # CTMRG for reconverging environment
+    reconv_int::Int = 10
+    reconv_alg::CTMRG
 end
 
 """
@@ -42,19 +30,10 @@ CTMRG right-move to update CTMRGEnv in the c-th column
         c   c+1
 ```
 """
-function ctmrg_rightmove(
-    col::Int,
-    peps::InfinitePEPS,
-    envs::CTMRGEnv,
-    chi::Int,
-    svderr::Float64=1e-9;
-    cheap::Bool=true,
-)
+function ctmrg_rightmove(col::Int, peps::InfinitePEPS, envs::CTMRGEnv, alg::SequentialCTMRG)
     Nr, Nc = size(peps)
     @assert 1 <= col <= Nc
-    envs, info = ctmrg_leftmove(
-        Nc + 1 - col, rot180(peps), rot180(envs), chi, svderr; cheap=cheap
-    )
+    envs, info = ctmrg_leftmove(Nc + 1 - col, rot180(peps), rot180(envs), alg)
     return rot180(envs), info
 end
 
@@ -64,23 +43,12 @@ Update all horizontal bonds in the c-th column
 To update rows, rotate the network clockwise by 90 degrees.
 """
 function update_column!(
-    col::Int,
-    gate::LocalOperator,
-    peps::InfinitePEPS,
-    envs::CTMRGEnv,
-    Dcut::Int,
-    chi::Int;
-    svderr::Float64=1e-9,
-    maxiter::Int=50,
-    maxdiff::Float64=1e-15,
-    cheap=true,
-    gaugefix::Bool=true,
+    col::Int, gate::LocalOperator, peps::InfinitePEPS, envs::CTMRGEnv, alg::FullUpdate
 )
     Nr, Nc = size(peps)
     @assert 1 <= col <= Nc
     localfid = 0.0
     costs = zeros(Nr)
-    truncscheme = truncerr(svderr) & truncdim(Dcut)
     #= Axis order of X, aR, Y, bL
 
             1             2            2         1
@@ -117,7 +85,7 @@ function update_column!(
         # positive/negative-definite approximant: env = ± Z Z†
         sgn, Zdg = positive_approx(env)
         # fix gauge
-        if gaugefix
+        if alg.fixgauge
             Zdg, X, Y, aR0, bL0 = fu_fixgauge(Zdg, X, Y, aR0, bL0)
         end
         env = sgn * Zdg' * Zdg
@@ -134,10 +102,10 @@ function update_column!(
         term = get_gateterm(gate, (CartesianIndex(row, col), CartesianIndex(row, col + 1)))
         aR2bL2 = ncon((term, aR0, bL0), ([-2, -3, 1, 2], [-1, 1, 3], [3, 2, -4]))
         # initialize truncated tensors using SVD truncation
-        aR, s_cut, bL, ϵ = tsvd(aR2bL2, ((1, 2), (3, 4)); trunc=truncscheme)
+        aR, s_cut, bL, ϵ = tsvd(aR2bL2, ((1, 2), (3, 4)); trunc=alg.trscheme)
         aR, bL = absorb_s(aR, s_cut, bL)
         # optimize aR, bL
-        aR, bL, cost = fu_optimize(aR, bL, aR2bL2, env; maxiter=maxiter, maxdiff=maxdiff)
+        aR, bL, cost = fu_optimize(aR, bL, aR2bL2, env, alg.opt_alg)
         costs[row] = cost
         aR /= norm(aR, Inf)
         bL /= norm(bL, Inf)
@@ -162,8 +130,8 @@ function update_column!(
         end
     end
     # update CTMRGEnv
-    envs2, info = ctmrg_leftmove(col, peps, envs, chi, svderr; cheap=cheap)
-    envs2, info = ctmrg_rightmove(_next(col, Nc), peps, envs2, chi, svderr; cheap=cheap)
+    envs2, info = ctmrg_leftmove(col, peps, envs, alg.lrmove_alg)
+    envs2, info = ctmrg_rightmove(_next(col, Nc), peps, envs2, alg.lrmove_alg)
     for c in [col, _next(col, Nc)]
         envs.corners[:, :, c] = envs2.corners[:, :, c]
         envs.edges[:, :, c] = envs2.edges[:, :, c]
@@ -174,36 +142,21 @@ end
 """
 One round of full update on the input InfinitePEPS `peps` and its CTMRGEnv `envs`
 
-When `cheap === true`, use half-infinite environment to construct CTMRG projectors.
-Otherwise, use full-infinite environment instead.
-
 Reference: Physical Review B 92, 035142 (2015)
 """
-function fu_iter(
-    gate::LocalOperator,
-    peps::InfinitePEPS,
-    envs::CTMRGEnv,
-    Dcut::Int,
-    chi::Int,
-    svderr::Float64=1e-9;
-    cheap=true,
-)
+function fu_iter(gate::LocalOperator, peps::InfinitePEPS, envs::CTMRGEnv, alg::FullUpdate)
     Nr, Nc = size(peps)
     fid, maxcost = 0.0, 0.0
     peps2, envs2 = deepcopy(peps), deepcopy(envs)
     for col in 1:Nc
-        tmpfid, costs = update_column!(
-            col, gate, peps2, envs2, Dcut, chi; svderr=svderr, cheap=cheap
-        )
+        tmpfid, costs = update_column!(col, gate, peps2, envs2, alg)
         fid += tmpfid
         maxcost = max(maxcost, maximum(costs))
     end
     peps2, envs2 = rotr90(peps2), rotr90(envs2)
     gate_rotated = rotr90(gate)
     for row in 1:Nr
-        tmpfid, costs = update_column!(
-            row, gate_rotated, peps2, envs2, Dcut, chi; svderr=svderr, cheap=cheap
-        )
+        tmpfid, costs = update_column!(row, gate_rotated, peps2, envs2, alg)
         fid += tmpfid
         maxcost = max(maxcost, maximum(costs))
     end
@@ -213,35 +166,17 @@ function fu_iter(
 end
 
 """
-Perform full update
+Perform full update with nearest neighbor Hamiltonian `ham`.
 """
 function fullupdate(
     peps::InfinitePEPS,
     envs::CTMRGEnv,
     ham::LocalOperator,
-    dt::Float64,
-    Dcut::Int,
-    chi::Int;
-    evolstep::Int=5000,
-    svderr::Float64=1e-9,
-    rgint::Int=10,
-    rgtol::Float64=1e-6,
-    rgmaxiter::Int=10,
-    ctmrgscheme=:sequential,
-    cheap=true,
+    fu_alg::FullUpdate,
+    ctm_alg::SequentialCTMRG,
 )
     time_start = time()
     N1, N2 = size(peps)
-    # CTMRG algorithm to reconverge environment
-    ctm_alg = CTMRG(;
-        tol=rgtol,
-        maxiter=rgmaxiter,
-        miniter=1,
-        verbosity=2,
-        trscheme=truncerr(svderr) & truncdim(chi),
-        svd_alg=SVDAdjoint(; fwd_alg=TensorKit.SDD()),
-        ctmrgscheme=ctmrgscheme,
-    )
     @printf(
         "%-4s %7s%10s%12s%11s  %s/%s\n",
         "step",
@@ -252,18 +187,18 @@ function fullupdate(
         "speed",
         "meas(s)"
     )
-    gate = get_gate(dt, ham)
+    gate = get_gate(fu_alg.dt, ham)
     esite0, peps0, envs0 = Inf, deepcopy(peps), deepcopy(envs)
     diff_energy = 0.0
-    for count in 1:evolstep
+    for count in 1:(fu_alg.maxiter)
         time0 = time()
-        peps, envs, (fid, cost) = fu_iter(gate, peps, envs, Dcut, chi, svderr; cheap=cheap)
+        peps, envs, (fid, cost) = fu_iter(gate, peps, envs, fu_alg)
         time1 = time()
-        if count == 1 || count % rgint == 0
+        if count == 1 || count % fu_alg.reconv_int == 0
             meast0 = time()
             # reconverge `env` (in place)
             println(stderr, "---- FU step $count: reconverging envs ----")
-            envs = leading_boundary(envs, peps, ctm_alg)
+            envs = leading_boundary(envs, peps, fu_alg.reconv_alg)
             esite = costfun(peps, envs, ham) / (N1 * N2)
             meast1 = time()
             # monitor change of CTMRGEnv by its singular values
@@ -272,7 +207,7 @@ function fullupdate(
             @printf(
                 "%-4d %7.0e%10.5f%12.3e%11.3e  %.3f/%.3f\n",
                 count,
-                dt,
+                fu_alg.dt,
                 esite,
                 diff_energy,
                 diff_ctm,
@@ -292,19 +227,7 @@ function fullupdate(
     for io in (stdout, stderr)
         @printf(io, "Reconverging final envs ... \n")
     end
-    envs = leading_boundary(
-        envs,
-        peps,
-        CTMRG(;
-            tol=1e-10,
-            maxiter=50,
-            miniter=1,
-            verbosity=2,
-            trscheme=truncerr(svderr) & truncdim(chi),
-            svd_alg=SVDAdjoint(; fwd_alg=TensorKit.SDD()),
-            ctmrgscheme=ctmrgscheme,
-        ),
-    )
+    envs = leading_boundary(envs, peps, ctm_alg)
     time_end = time()
     @printf("Evolution time: %.3f s\n\n", time_end - time_start)
     print(stderr, "\n----------\n\n")

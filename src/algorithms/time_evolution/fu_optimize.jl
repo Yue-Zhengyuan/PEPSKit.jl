@@ -245,6 +245,16 @@ function solve_ab(R::AbstractTensorMap, S::AbstractTensorMap, ab0::AbstractTenso
 end
 
 """
+Algorithm struct for the alternating least square optimization step in full update. 
+`tol` is the maximum `|fid_{n+1} - fid_{n}| / fid_0` 
+(normalized local fidelity change between two optimization steps)
+"""
+@kwdef struct FUALSOptimize
+    maxiter::Int = 50
+    tol::Float64 = 1e-15
+end
+
+"""
 Minimize the cost function
 ```
     fix bL:
@@ -261,9 +271,8 @@ function fu_optimize(
     aR0::AbstractTensorMap,
     bL0::AbstractTensorMap,
     aR2bL2::AbstractTensorMap,
-    env::AbstractTensorMap;
-    maxiter::Int=50,
-    maxdiff::Float64=1e-15,
+    env::AbstractTensorMap,
+    alg::FUALSOptimize;
     check_int::Int=1,
 )
     @debug "---- Iterative optimization ----\n"
@@ -281,7 +290,7 @@ function fu_optimize(
         )
         return aR, bL, cost0
     end
-    for count in 1:maxiter
+    for count in 1:(alg.maxiter)
         time0 = time()
         Ra = tensor_Ra(env, bL)
         Sa = tensor_Sa(env, bL, aR2bL2)
@@ -304,12 +313,12 @@ function fu_optimize(
                 time1 - time0
             )
         end
-        if diff_ab < maxdiff
+        if diff_ab < alg.tol
             break
         end
         aR0, bL0 = deepcopy(aR), deepcopy(bL)
         cost0, fid0 = cost, fid
-        if count == maxiter
+        if count == alg.maxiter
             @warn "Warning: max iter $maxiter reached for ALS optimization\n"
         end
     end
