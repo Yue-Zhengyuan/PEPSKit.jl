@@ -9,13 +9,24 @@ Each FU run stops when the energy starts to increase.
     dt::Float64
     maxiter::Int
     fixgauge::Bool = true
+    # truncation scheme after applying gate
     trscheme::TensorKit.TruncationScheme
+    # alternating least square optimization
     opt_alg::FUALSOptimize = FUALSOptimize()
     # CTMRG for left-right move
     lrmove_alg::SequentialCTMRG
-    # CTMRG for reconverging environment
+    # interval to reconverge environments
     reconv_int::Int = 10
+    # CTMRG for reconverging environment
     reconv_alg::CTMRG
+end
+
+function truncation_scheme(alg::FullUpdate, v::ElementarySpace)
+    if alg.trscheme isa FixedSpaceTruncation
+        return truncspace(v)
+    else
+        return alg.trscheme
+    end
 end
 
 """
@@ -102,7 +113,7 @@ function update_column!(
         term = get_gateterm(gate, (CartesianIndex(row, col), CartesianIndex(row, col + 1)))
         aR2bL2 = ncon((term, aR0, bL0), ([-2, -3, 1, 2], [-1, 1, 3], [3, 2, -4]))
         # initialize truncated tensors using SVD truncation
-        aR, s_cut, bL, ϵ = tsvd(aR2bL2, ((1, 2), (3, 4)); trunc=alg.trscheme)
+        aR, s_cut, bL, ϵ = tsvd(aR2bL2, ((1, 2), (3, 4)); trunc=truncation_scheme(alg, space(aR0, 3)))
         aR, bL = absorb_s(aR, s_cut, bL)
         # optimize aR, bL
         aR, bL, cost = fu_optimize(aR, bL, aR2bL2, env, alg.opt_alg)
