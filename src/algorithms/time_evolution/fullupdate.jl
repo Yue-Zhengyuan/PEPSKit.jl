@@ -113,7 +113,9 @@ function update_column!(
         term = get_gateterm(gate, (CartesianIndex(row, col), CartesianIndex(row, col + 1)))
         aR2bL2 = ncon((term, aR0, bL0), ([-2, -3, 1, 2], [-1, 1, 3], [3, 2, -4]))
         # initialize truncated tensors using SVD truncation
-        aR, s_cut, bL, ϵ = tsvd(aR2bL2, ((1, 2), (3, 4)); trunc=truncation_scheme(alg, space(aR0, 3)))
+        aR, s_cut, bL, ϵ = tsvd(
+            aR2bL2, ((1, 2), (3, 4)); trunc=truncation_scheme(alg, space(aR0, 3))
+        )
         aR, bL = absorb_s(aR, s_cut, bL)
         # optimize aR, bL
         aR, bL, cost = fu_optimize(aR, bL, aR2bL2, env, alg.opt_alg)
