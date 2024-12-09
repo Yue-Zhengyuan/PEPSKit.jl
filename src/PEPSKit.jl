@@ -173,7 +173,7 @@ export leading_boundary
 export PEPSOptimize, GeomSum, ManualIter, LinSolver
 export fixedpoint
 
-export absorb_wt
+export absorb_weight
 export su_iter, simpleupdate, SimpleUpdate
 export fu_iter, fullupdate, FullUpdate
 
