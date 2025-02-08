@@ -1,14 +1,21 @@
 """
-Full environment truncation (FET) of the bond between `a` and `b`.
+    bond_optimize(env::BondEnv{T,S}, a::AbstractTensor{T,S,3}, b::AbstractTensor{T,S,3}, alg) where {T<:Number,S<:ElementarySpace}
+
+Truncation of the bond between `a` and `b`.
 ```
     |------env------|
-    |→ a† ===== b† ←|
+    |- a† ===== b† -|
     |   ↑       ↑   |
-    |←- a ===== b -→|
+    |-- a ===== b --|
     |---------------|
 ```
-
-Reference: Physical Review B 98, 085155 (2018)
+The truncation algorithm `alg` can be either `FullEnvTruncation` or `ALSTruncation`. 
+The index order of `a` or `b` is
+```
+        2
+        |
+    1 -a/b- 3
+```
 """
 function bond_optimize(
     env::BondEnv{T,S},
@@ -16,27 +23,23 @@ function bond_optimize(
     b::AbstractTensor{T,S,3},
     alg::FullEnvTruncation,
 ) where {T<:Number,S<:ElementarySpace}
-    # dual check
-    @assert [isdual(space(env, ax)) for ax in 1:4] == [0, 0, 1, 1]
-    @assert [isdual(space(a, ax)) for ax in 1:2] == [0, 0]
-    @assert [isdual(space(b, ax)) for ax in 2:3] == [0, 0]
+    # dual check of physical index
+    @assert !isdual(space(a, 2))
+    @assert !isdual(space(b, 2))
     #= initialize bond matrix using QR as `Ra Lb`
 
             ↑    ↑               ↑               ↑
-        ←-- a == b --→   ==>   ← Qa ← Ra == Lb → Qb →
+        --- a == b ---   ==>   - Qa - Ra == Lb - Qb -
     =#
     Qa, Ra = leftorth(a, ((1, 2), (3,)))
     Lb, Qb = rightorth(b, ((1,), (2, 3)))
-    flipper = isomorphism(flip(space(Qb, 1)), space(Qb, 1))
-    Lb = Lb * flipper'
-    Qb = twist(flipper * Qb, 1)
     @tensor b0[-1 -2] := Ra[-1 1] * Lb[1 -2]
     #= initialize bond environment around `Ra Lb`
 
         |-------env-------|
-        |→ Qa†→     ← Qb†←|
+        |- Qa†-     - Qb†-|
         |  ↑          ↑   |
-        |← Qa ←     → Qb →|
+        |- Qa -     - Qb -|
         |-----------------|
     =#
     @tensor env2[-1 -2; -3 -4] := (

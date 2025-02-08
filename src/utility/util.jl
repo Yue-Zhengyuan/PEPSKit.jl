@@ -45,34 +45,43 @@ function _elementwise_mult(a₁::AbstractTensorMap, a₂::AbstractTensorMap)
     return dst
 end
 
-_safe_pow(a, pow, tol) = (pow < 0 && abs(a) < tol) ? zero(a) : a^pow
+_safe_pow(a::Real, pow::Real, tol::Real) = (pow < 0 && abs(a) < tol) ? zero(a) : a^pow
 
 # TODO: change the type of `S` to DiagonalTensorMap
 """
-    sdiag_pow(S::AbstractTensorMap, pow::Real; tol::Real=eps(scalartype(S))^(3 / 4))
+    sdiag_pow(s, pow::Real; tol::Real=eps(scalartype(s))^(3 / 4))
 
-Compute `S^pow` for diagonal matrices `S`.
+Compute `s^pow` for a diagonal matrix `s`.
 """
-function sdiag_pow(S::AbstractTensorMap, pow::Real; tol::Real=eps(scalartype(S))^(3 / 4))
-    tol *= norm(S, Inf)  # Relative tol w.r.t. largest singular value (use norm(∘, Inf) to make differentiable)
-    Spow = similar(S)
-    for (k, b) in blocks(S)
+function sdiag_pow(s::DiagonalTensorMap, pow::Real; tol::Real=eps(scalartype(s))^(3 / 4))
+    # Relative tol w.r.t. largest singular value (use norm(∘, Inf) to make differentiable)
+    tol *= norm(s, Inf)
+    spow = DiagonalTensorMap(_safe_pow.(s.data, pow, tol), space(s, 1))
+    return spow
+end
+function sdiag_pow(
+    s::AbstractTensorMap{T,S,1,1}, pow::Real; tol::Real=eps(scalartype(s))^(3 / 4)
+) where {T,S}
+    # Relative tol w.r.t. largest singular value (use norm(∘, Inf) to make differentiable)
+    tol *= norm(s, Inf)
+    spow = similar(s)
+    for (k, b) in blocks(s)
         copyto!(
-            block(Spow, k), LinearAlgebra.diagm(_safe_pow.(LinearAlgebra.diag(b), pow, tol))
+            block(spow, k), LinearAlgebra.diagm(_safe_pow.(LinearAlgebra.diag(b), pow, tol))
         )
     end
-    return Spow
+    return spow
 end
 
 function ChainRulesCore.rrule(
     ::typeof(sdiag_pow),
-    S::AbstractTensorMap,
+    s::AbstractTensorMap,
     pow::Real;
-    tol::Real=eps(scalartype(S))^(3 / 4),
+    tol::Real=eps(scalartype(s))^(3 / 4),
 )
-    tol *= norm(S, Inf)
-    spow = sdiag_pow(S, pow; tol)
-    spow_minus1_conj = scale!(sdiag_pow(S', pow - 1; tol), pow)
+    tol *= norm(s, Inf)
+    spow = sdiag_pow(s, pow; tol)
+    spow_minus1_conj = scale!(sdiag_pow(s', pow - 1; tol), pow)
     function sdiag_pow_pullback(c̄_)
         c̄ = unthunk(c̄_)
         return (ChainRulesCore.NoTangent(), _elementwise_mult(c̄, spow_minus1_conj))
@@ -81,7 +90,7 @@ function ChainRulesCore.rrule(
 end
 
 """
-    absorb_s(u::AbstractTensorMap, s::AbstractTensorMap, vh::AbstractTensorMap)
+    absorb_s(u::AbstractTensorMap, s::DiagonalTensorMap, vh::AbstractTensorMap)
 
 Given `tsvd` result `u`, `s` and `vh`, absorb singular values `s` into `u` and `vh` by:
 ```
@@ -89,8 +98,7 @@ Given `tsvd` result `u`, `s` and `vh`, absorb singular values `s` into `u` and `
 ```
 """
 function absorb_s(u::AbstractTensorMap, s::DiagonalTensorMap, vh::AbstractTensorMap)
-    @assert domain(s) == codomain(s)
-    @assert isdual(space(s, 1)) === false
+    @assert !isdual(space(s, 1))
     sqrt_s = sdiag_pow(s, 0.5)
     return u * sqrt_s, sqrt_s * vh
 end

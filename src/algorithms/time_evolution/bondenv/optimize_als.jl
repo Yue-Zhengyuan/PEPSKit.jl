@@ -1,33 +1,34 @@
 """
+    ALSTruncation
+
 Algorithm struct for the alternating least square optimization step in full update. 
-`tol` is the maximum `|fid_{n+1} - fid_{n}| / fid_0` 
-(normalized local fidelity change between two optimization steps)
+`tol` is the maximum `|fid_{n+1} - fid_{n}|` 
+(fidelity change between two optimization steps)
 """
 @kwdef struct ALSTruncation
     trscheme::TensorKit.TruncationScheme
     maxiter::Int = 50
     tol::Float64 = 1e-15
-    verbose::Bool = false
-    check_int::Int = 1
+    check_int::Int = 0
 end
 
 """
 Construct the tensor
 ```
-    |------------env------------|
-    |→ DX1     Db1 → bL† ← DY1 ←|
-    |                ↑          |
-    |                db         |
-    |                ↑          |
-    |← DX0     Db0 ← bL -→ DY0 →|
-    |---------------------------|
+    |------------env-----------|
+    |- DX1     Db1 - b† - DY1 -|
+    |                ↑         |
+    |                db        |
+    |                ↑         |
+    |- DX0     Db0 - b -- DY0 -|
+    |--------------------------|
 ```
 """
 function tensor_Ra(
-    env::BondEnv{T,S}, bL::AbstractTensor{T,S,3}
+    env::BondEnv{T,S}, b::AbstractTensor{T,S,3}
 ) where {T<:Number,S<:ElementarySpace}
-    return @autoopt @tensor Ra[DX1, Db1, DX0, Db0] := (
-        env[DX1, DY1, DX0, DY0] * bL[Db0, db, DY0] * conj(bL[Db1, db, DY1])
+    return @autoopt @tensor Ra[DX1, Db1; DX0, Db0] := (
+        env[DX1, DY1, DX0, DY0] * b[Db0, db, DY0] * conj(b[Db1, db, DY1])
     )
 end
 
@@ -35,39 +36,39 @@ end
 Construct the tensor
 ```
     |-----------env-----------|
-    |→ DX1   Db1 → bL† ← DY1 ←|
+    |- DX1   Db1 -- b† - DY1 -|
     |               ↑         |
     |         da    db        |
     |         ↑     ↑         |
-    |← DX0 ←- aR2 bL2 -→ DY0 →|
+    |- DX0 -- a2    b2 - DY0 -|
     |-------------------------|
 ```
 """
 function tensor_Sa(
-    env::BondEnv{T,S}, bL::AbstractTensor{T,S,3}, aR2bL2::AbstractTensor{T,S,4}
+    env::BondEnv{T,S}, b::AbstractTensor{T,S,3}, a2b2::AbstractTensor{T,S,4}
 ) where {T<:Number,S<:ElementarySpace}
     return @autoopt @tensor Sa[DX1, Db1, da] := (
-        env[DX1, DY1, DX0, DY0] * conj(bL[Db1, db, DY1]) * aR2bL2[DX0, da, db, DY0]
+        env[DX1, DY1, DX0, DY0] * conj(b[Db1, db, DY1]) * a2b2[DX0, da, db, DY0]
     )
 end
 
 """
 Construct the tensor
 ```
-    |------------env------------|
-    |→ DX1 → aR† → Da1     DY1 ←|
-    |        ↑                  |
-    |        da                 |
-    |        ↑                  |
-    |← DX0 ← aR ←- Da0     DY0 →|
-    |---------------------------|
+    |------------env-----------|
+    |- DX1 - a† - Da1     DY1 -|
+    |        ↑                 |
+    |        da                |
+    |        ↑                 |
+    |- DX0 - a -- Da0     DY0 -|
+    |--------------------------|
 ```
 """
 function tensor_Rb(
-    env::BondEnv{T,S}, aR::AbstractTensor{T,S,3}
+    env::BondEnv{T,S}, a::AbstractTensor{T,S,3}
 ) where {T<:Number,S<:ElementarySpace}
-    return @autoopt @tensor Rb[Da1, DY1, Da0, DY0] := (
-        env[DX1, DY1, DX0, DY0] * aR[DX0, da, Da0] * conj(aR[DX1, da, Da1])
+    return @autoopt @tensor Rb[Da1, DY1; Da0, DY0] := (
+        env[DX1, DY1, DX0, DY0] * a[DX0, da, Da0] * conj(a[DX1, da, Da1])
     )
 end
 
@@ -75,19 +76,19 @@ end
 Construct the tensor
 ```
     |-----------env-----------|
-    |→ DX1 → aR† → Da1   DY1 ←|
+    |- DX1 -- a† - Da1   DY1 -|
     |         ↑               |
     |         da   db         |
     |         ↑     ↑         |
-    |← DX0 ←- aR2 bL2 -→ DY0 →|
+    |- DX0 -- a2   b2 -- DY0 -|
     |-------------------------|
 ```
 """
 function tensor_Sb(
-    env::BondEnv{T,S}, aR::AbstractTensor{T,S,3}, aR2bL2::AbstractTensor{T,S,4}
+    env::BondEnv{T,S}, a::AbstractTensor{T,S,3}, a2b2::AbstractTensor{T,S,4}
 ) where {T<:Number,S<:ElementarySpace}
     return @autoopt @tensor Sb[Da1, DY1, db] := (
-        env[DX1, DY1, DX0, DY0] * conj(aR[DX1, da, Da1]) * aR2bL2[DX0, da, db, DY0]
+        env[DX1, DY1, DX0, DY0] * conj(a[DX1, da, Da1]) * a2b2[DX0, da, db, DY0]
     )
 end
 
@@ -95,60 +96,58 @@ end
 Calculate the inner product <a1,b1|a2,b2>
 ```
     |----------env----------|
-    |→ DX1 → aR1bL1† ← DY1 ←|
+    |- DX1 - (a1 b1)†- DY1 -|
     |        ↑    ↑         |
     |        da   db        |
     |        ↑    ↑         |
-    |← DX0 ← aR2bL2 → DY0 -→|
+    |- DX0 - (a2 b2) - DY0 -|
     |-----------------------|
 ```
 """
 function inner_prod(
-    env::BondEnv{T,S}, aR1bL1::AbstractTensor{T,S,4}, aR2bL2::AbstractTensor{T,S,4}
+    env::BondEnv{T,S}, a1b1::AbstractTensor{T,S,4}, a2b2::AbstractTensor{T,S,4}
 ) where {T<:Number,S<:ElementarySpace}
     return @autoopt @tensor env[DX1, DY1, DX0, DY0] *
-        conj(aR1bL1[DX1, da, db, DY1]) *
-        aR2bL2[DX0, da, db, DY0]
+        conj(a1b1[DX1, da, db, DY1]) *
+        a2b2[DX0, da, db, DY0]
 end
 
 """
-Calculate the fidelity using aR, bL
-between two evolution steps
+Calculate the fidelity between two evolution steps
 ```
-            |<aR1 bL1 | aR2 bL2>|^2
-    ----------------------------------------
-    <aR1 bL1 | aR1 bL1> <aR2 bL2 | aR2 bL2>
+        |⟨a1,b1|a2,b2⟩|^2
+    --------------------------
+    ⟨a1,b1|a1,b1⟩⟨a2,b2|a2,b2⟩
 ```
 """
 function fidelity(
-    env::BondEnv{T,S}, aR1bL1::AbstractTensor{T,S,4}, aR2bL2::AbstractTensor{T,S,4}
+    env::BondEnv{T,S}, a1b1::AbstractTensor{T,S,4}, a2b2::AbstractTensor{T,S,4}
 ) where {T<:Number,S<:ElementarySpace}
-    b12 = inner_prod(env, aR1bL1, aR2bL2)
-    b11 = inner_prod(env, aR1bL1, aR1bL1)
-    b22 = inner_prod(env, aR2bL2, aR2bL2)
+    b12 = inner_prod(env, a1b1, a2b2)
+    b11 = inner_prod(env, a1b1, a1b1)
+    b22 = inner_prod(env, a2b2, a2b2)
     return abs2(b12) / abs(b11 * b22)
 end
 
 """
-Contract the axis between `aR` and `bL` tensors
-"""
-function _combine_aRbL(
-    aR::AbstractTensor{T,S,3}, bL::AbstractTensor{T,S,3}
-) where {T<:Number,S<:ElementarySpace}
-    #= 
+Contract the axis between `a` and `b` tensors
+```
             da      db
             ↑       ↑
-    ← DX ← aR ← D ← bL → DY →
-    =#
-    return @tensor aRbL[DX, da, db, DY] := aR[DX, da, D] * bL[D, db, DY]
+    -- DX - a - D - b - DY --
+```
+"""
+function _combine_ab(
+    a::AbstractTensor{T,S,3}, b::AbstractTensor{T,S,3}
+) where {T<:Number,S<:ElementarySpace}
+    return @tensor ab[DX, da, db, DY] := a[DX, da, D] * b[D, db, DY]
 end
 
 """
 Calculate the cost function
 ```
-    f(a,b)  = | |Psi(a1,b1)> - |Psi(a2,b2)> |^2
-    = <Psi(a1,b1)|Psi(a1,b1)> + <Psi(a2,b2)|Psi(a2,b2)>
-        - 2 Re<Psi(a1,b1)|Psi(a2,b2)>
+    f(a,b)  = ‖ |a1,b1⟩ - |a2,b2⟩ ‖^2
+    = ⟨a1,b1|a1,b1⟩ - 2 Re⟨a1,b1|a2,b2⟩ + ⟨a2,b2|a2,b2⟩
 ```
 """
 function cost_func(
@@ -163,69 +162,55 @@ end
 """
 Solving the equations
 ```
-    Ra aR = Sa, Rb bL = Sb
+    Ra a = Sa, Rb b = Sb
 ```
 """
 function solve_ab(
-    tR::AbstractTensor{T,S,4}, tS::AbstractTensorMap{T,S,3}, ab0::AbstractTensor{T,S,3}
+    tR::AbstractTensorMap{T,S,2,2}, tS::AbstractTensor{T,S,3}, ab0::AbstractTensor{T,S,3}
 ) where {T<:Number,S<:ElementarySpace}
-    f(x) = ncon((tR, x), ([-1, -2, 1, 2], [1, 2, -3]))
+    f(x) = ncon((tR, x), ([-1 -2 1 2], [1 2 -3]))
     ab, info = linsolve(f, tS, permute(ab0, (1, 3, 2)), 0, 1)
     return permute(ab, (1, 3, 2)), info
 end
 
-"""
-Minimize the cost function
-```
-    fix bL:
-    d(aR,aR†) = aR† Ra aR - aR† Sa - Sa† aR + T
-    minimized by Ra aR = Sa
-
-    fix aR:
-    d(bL,bL†) = bL† Rb bL - bL† Sb - Sb† bL + T
-    minimized by Rb bL = Sb
-```
-`aR0`, `bL0` are initial values of `aR`, `bL`
-"""
 function bond_optimize(
     env::BondEnv{T,S},
     a::AbstractTensor{T,S,3},
     b::AbstractTensor{T,S,3},
     alg::ALSTruncation,
 ) where {T<:Number,S<:ElementarySpace}
-    # dual check
-    @assert [isdual(space(env, ax)) for ax in 1:4] == [0, 0, 1, 1]
-    @assert [isdual(space(a, ax)) for ax in 1:2] == [0, 0]
-    @assert [isdual(space(b, ax)) for ax in 2:3] == [0, 0]
-    if alg.verbose
-        @info "Alternating least square optimization --------"
+    # dual check of physical index
+    @assert !isdual(space(a, 2))
+    @assert !isdual(space(b, 2))
+    verbose = (alg.check_int > 0)
+    if verbose
         @info @sprintf(
             "%-4s%12s%12s%12s%12s %10s\n",
-            "Step",
+            "ALS iter",
             "Cost",
             "Fidelity",
             "ϵ_cost",
-            "ϵ_fid",
+            "Δfid",
             "Time/s"
         )
     end
     time0 = time()
-    aR2bL2 = _combine_aRbL(a, b)
+    a2b2 = _combine_ab(a, b)
     # initialize truncated aR, bL
-    aR, s, bL = tsvd(aR2bL2, ((1, 2), (3, 4)); trunc=alg.trscheme)
-    # normalize
+    a, s, b = tsvd(a2b2, ((1, 2), (3, 4)); trunc=alg.trscheme)
     s /= norm(s, Inf)
     Vtrunc = space(s, 1)
-    aR, bL = absorb_s(aR, s, bL)
-    aR, bL = permute(aR, (1, 2, 3)), permute(bL, (1, 2, 3))
-    aRbL = _combine_aRbL(aR, bL)
-    cost00 = cost_func(env, aRbL, aR2bL2)
-    fid00 = fidelity(env, aRbL, aR2bL2)
+    a, b = absorb_s(a, s, b)
+    a, b = permute(a, (1, 2, 3)), permute(b, (1, 2, 3))
+    ab = _combine_ab(a, b)
+    # cost function is normalized by initial value
+    cost00 = cost_func(env, ab, a2b2)
+    fid00 = fidelity(env, ab, a2b2)
     cost0, fid0, fid, diff_fid = cost00, fid00, 0.0, 0.0
     # no need to further optimize
     if abs(cost0) < 5e-15
         time1 = time()
-        if alg.verbose
+        if verbose
             @info @sprintf(
                 "%-4d%12.3e%12.3e%12.3e%12.3e %10.3e\n",
                 0,
@@ -239,19 +224,28 @@ function bond_optimize(
     else
         for count in 1:(alg.maxiter)
             time0 = time()
-            Ra = tensor_Ra(env, bL)
-            Sa = tensor_Sa(env, bL, aR2bL2)
-            aR, info_a = solve_ab(Ra, Sa, aR)
-            Rb = tensor_Rb(env, aR)
-            Sb = tensor_Sb(env, aR, aR2bL2)
-            bL, info_b = solve_ab(Rb, Sb, bL)
-            aRbL = _combine_aRbL(aR, bL)
-            cost = cost_func(env, aRbL, aR2bL2)
-            fid = fidelity(env, aRbL, aR2bL2)
+            #= 
+            Fixing `b`, the cost function can be expressed in the R, S tensors as
+            ```
+                f(a†,a) = a† Ra a - a† Sa - Sa† a + const
+            ```
+            `f` is minimized when
+                ∂f/∂ā = Ra a - Sa = 0
+            =#
+            Ra = tensor_Ra(env, b)
+            Sa = tensor_Sa(env, b, a2b2)
+            a, info_a = solve_ab(Ra, Sa, a)
+            # Fixing `a`, solve for `b` from `Rb b = Sb`
+            Rb = tensor_Rb(env, a)
+            Sb = tensor_Sb(env, a, a2b2)
+            b, info_b = solve_ab(Rb, Sb, b)
+            ab = _combine_ab(a, b)
+            cost = cost_func(env, ab, a2b2)
+            fid = fidelity(env, ab, a2b2)
             diff_cost = abs(cost - cost0) / cost00
             diff_fid = abs(fid - fid0)
             time1 = time()
-            if alg.verbose && (count == 1 || count % alg.check_int == 0)
+            if verbose && (count == 1 || count % alg.check_int == 0)
                 @info @sprintf(
                     "%-4d%12.3e%12.3e%12.3e%12.3e %10.3e\n",
                     count,
@@ -266,15 +260,15 @@ function bond_optimize(
             if diff_fid < alg.tol
                 break
             end
-            aR0, bL0 = deepcopy(aR), deepcopy(bL)
+            aR0, bL0 = deepcopy(a), deepcopy(b)
             if count == alg.maxiter
                 @warn "Warning: max iter $(alg.maxiter) reached for ALS optimization\n"
             end
         end
     end
-    aRbL = _combine_aRbL(aR, bL)
-    aR, s, bL = tsvd(aRbL, ((1, 2), (3, 4)); trunc=truncspace(Vtrunc))
+    ab = _combine_ab(a, b)
+    a, s, b = tsvd(ab, ((1, 2), (3, 4)); trunc=truncspace(Vtrunc))
     # normalize singular value spectrum
     s /= norm(s, Inf)
-    return aR, s, bL, (; fid, diff_fid)
+    return a, s, b, (; fid, diff_fid)
 end

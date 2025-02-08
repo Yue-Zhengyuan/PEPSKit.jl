@@ -32,7 +32,6 @@ include("states/infinitepartitionfunction.jl")
 
 include("operators/infinitepepo.jl")
 include("operators/transfermatrix.jl")
-include("operators/derivatives.jl")
 include("operators/localoperator.jl")
 include("operators/lattices/squarelattice.jl")
 include("operators/models.jl")
@@ -79,7 +78,7 @@ include("utility/symmetrization.jl")
         const ctmrg_alg = SimultaneousCTMRG(
             ctmrg_tol, ctmrg_maxiter, ctmrg_miniter, 2, projector_alg
         )
-        const optimizer = LBFGS(32; maxiter=100, gradtol=1e-4, verbosity=2)
+        const optimizer = LBFGS(32; maxiter=100, gradtol=1e-4, verbosity=3)
         const gradient_linsolver = KrylovKit.BiCGStab(;
             maxiter=Defaults.fpgrad_maxiter, tol=Defaults.fpgrad_tol
         )
@@ -133,7 +132,7 @@ module Defaults
     const ctmrg_alg = SimultaneousCTMRG(
         ctmrg_tol, ctmrg_maxiter, ctmrg_miniter, 2, projector_alg
     )
-    const optimizer = LBFGS(32; maxiter=100, gradtol=1e-4, verbosity=2)
+    const optimizer = LBFGS(32; maxiter=100, gradtol=1e-4, verbosity=3)
     const gradient_linsolver = KrylovKit.BiCGStab(;
         maxiter=Defaults.fpgrad_maxiter, tol=Defaults.fpgrad_tol
     )

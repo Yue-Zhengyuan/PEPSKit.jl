@@ -1,11 +1,11 @@
 
 """
-    const PEPSWeight{S}
+    const PEPSWeight
 
 Default type for PEPS bond weights with 2 virtual indices, conventionally ordered as: ``wt : WS ← EN``. 
 `WS`, `EN` denote the west/south, east/north spaces for x/y-weights on the square lattice, respectively.
 """
-const PEPSWeight{T,S} = DiagonalTensorMap{T,S} where {T<:Number,S<:ElementarySpace}
+const PEPSWeight{T,S} = AbstractTensorMap{T,S,1,1}
 
 """
     struct SUWeight{E<:PEPSWeight}
@@ -96,27 +96,6 @@ end
 
 """
     InfiniteWeightPEPS(
-        f, T, Pspace::S, Nspace::S, Espace::S=Nspace; unitcell::Tuple{Int,Int}=(1, 1)
-    ) where {S<:ElementarySpace}
-
-Create an InfiniteWeightPEPS by specifying its physical, north and east spaces (as `ElementarySpace`s) and unit cell size.
-Use `T` to specify the element type of the vertex tensors. 
-Bond weights are initialized as identity matrices of element type `Float64`. 
-"""
-function InfiniteWeightPEPS(
-    f, T, Pspace::S, Nspace::S, Espace::S=Nspace; unitcell::Tuple{Int,Int}=(1, 1)
-) where {S<:ElementarySpace}
-    vertices = InfinitePEPS(f, T, Pspace, Nspace, Espace; unitcell=unitcell).A
-    Nr, Nc = unitcell
-    weights = collect(
-        DiagonalTensorMap(id(d == 1 ? Espace : Nspace)) for
-        (d, r, c) in Iterators.product(1:2, 1:Nr, 1:Nc)
-    )
-    return InfiniteWeightPEPS(vertices, SUWeight(weights))
-end
-
-"""
-    InfiniteWeightPEPS(
         f=randn, T=ComplexF64, Pspaces::M, Nspaces::M, [Espaces::M]
     ) where {M<:AbstractMatrix{<:Union{Int,ElementarySpace}}}
 
@@ -135,11 +114,28 @@ function InfiniteWeightPEPS(
 ) where {M<:AbstractMatrix{<:Union{Int,ElementarySpace}}}
     vertices = InfinitePEPS(f, T, Pspaces, Nspaces, Espaces).A
     Nr, Nc = size(vertices)
-    weights = collect(
-        DiagonalTensorMap(id(d == 1 ? Espaces[r, c] : Nspaces[r, c])) for
-        (d, r, c) in Iterators.product(1:2, 1:Nr, 1:Nc)
-    )
+    weights = map(Iterators.product(1:2, 1:Nr, 1:Nc)) do (d, r, c)
+        V = (d == 1 ? Espaces[r, c] : Nspaces[r, c])
+        DiagonalTensorMap(ones(reduceddim(V)), V)
+    end
     return InfiniteWeightPEPS(vertices, SUWeight(weights))
+end
+
+"""
+    InfiniteWeightPEPS(
+        f, T, Pspace::S, Nspace::S, Espace::S=Nspace; unitcell::Tuple{Int,Int}=(1, 1)
+    ) where {S<:ElementarySpace}
+
+Create an InfiniteWeightPEPS by specifying its physical, north and east spaces (as `ElementarySpace`s) and unit cell size.
+Use `T` to specify the element type of the vertex tensors. 
+Bond weights are initialized as identity matrices of element type `Float64`. 
+"""
+function InfiniteWeightPEPS(
+    f, T, Pspace::S, Nspace::S, Espace::S=Nspace; unitcell::Tuple{Int,Int}=(1, 1)
+) where {S<:ElementarySpace}
+    return InfiniteWeightPEPS(
+        f, T, fill(Pspace, unitcell), fill(Nspace, unitcell), fill(Espace, unitcell)
+    )
 end
 
 """
