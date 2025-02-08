@@ -95,7 +95,9 @@ function _fu_bondx!(
     =#
     aR2bL2 = ncon((gate, aR0, bL0), ([-2, -3, 1, 2], [-1, 1, 3], [3, 2, -4]))
     # initialize un-truncated tensors using SVD
-    aR, s_cut, bL, ϵ = tsvd(aR2bL2, ((1, 2), (3, 4)); trunc=truncerr(1e-15))
+    aR, s_cut, bL, ϵ = tsvd(
+        aR2bL2, ((1, 2), (3, 4)); trunc=truncerr(1e-15), alg=TensorKit.SVD()
+    )
     aR, bL = absorb_s(aR, s_cut, bL)
     aR, bL = permute(aR, (1, 2, 3)), permute(bL, (1, 2, 3))
     # optimize aR, bL

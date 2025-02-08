@@ -68,7 +68,7 @@ function _ntu_bondx!(
     =#
     @tensor aR2bL2[-1 -2; -3 -4] := gate[-2 -3; 1 2] * aR[-1 1 3] * bL[3 2 -4]
     # initialize aR, bL using un-truncated SVD
-    aR, s, bL, ϵ = tsvd(aR2bL2; trunc=truncerr(1e-15))
+    aR, s, bL, ϵ = tsvd(aR2bL2; trunc=truncerr(1e-15), alg=TensorKit.SVD())
     aR, bL = absorb_s(aR, s, bL)
     aR, bL = permute(aR, (1, 2, 3)), permute(bL, (1, 2, 3))
     # optimize aR, bL

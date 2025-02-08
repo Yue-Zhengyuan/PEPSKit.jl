@@ -6,7 +6,7 @@ Algorithm struct for the full environment truncation (FET).
 @kwdef struct FullEnvTruncation
     trscheme::TensorKit.TruncationScheme
     maxiter::Int = 50
-    tol::Float64 = 1e-13
+    tol::Float64 = 1e-14
     check_int::Int = 0
 end
 
@@ -236,9 +236,9 @@ function fullenv_truncate(
             @warn "FET cancel" * message
         end
         if verbose && (iter == 1 || iter % alg.check_int == 0 || diff_wt < alg.tol)
-            @info ((diff_wt < alg.tol) ? "FET conv  " : "FET iter  ") * message
+            @info ((diff_fid < alg.tol) ? "FET conv  " : "FET iter  ") * message
         end
-        if diff_wt < alg.tol
+        if diff_fid < alg.tol
             break
         end
     end
