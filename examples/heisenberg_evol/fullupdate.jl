@@ -4,9 +4,11 @@ include("simpleupdate.jl")
 peps = peps_
 dts = [2e-2, 1e-2, 5e-3]
 maxiter = 2000
-colmove_alg = SequentialCTMRG(; verbosity=0, maxiter=1, trscheme=trscheme_envs)
 CTMRGAlg = SequentialCTMRG
 projector_alg = HalfInfiniteProjector
+colmove_alg = SequentialCTMRG(;
+    verbosity=0, maxiter=1, trscheme=trscheme_envs, projector_alg
+)
 reconv_alg = CTMRGAlg(;
     tol=1e-6, maxiter=10, verbosity=2, trscheme=trscheme_envs, projector_alg
 )
