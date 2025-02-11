@@ -1,0 +1,113 @@
+[ Info: Space of x-weight at [1, 1] = ℂ^4
+[ Info: "memory usage (GB)" => 1.0273284912109375
+[ Info: "treepermutercache" => CacheInfo(; hits=117, misses=17, currentsize=17, maxsize=100000)
+[ Info: "treetransposercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "treebraidercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "GLOBAL_FUSIONBLOCKSTRUCTURE_CACHE" => CacheInfo(; hits=886, misses=23, currentsize=23, maxsize=10000)
+[ Info: SU iter 1      :  dt = 1e-02,  weight diff = 1.683e+00,  time = 17.023 sec
+[ Info: Space of x-weight at [1, 1] = ℂ^4
+[ Info: "memory usage (GB)" => 1.0462493896484375
+[ Info: "treepermutercache" => CacheInfo(; hits=66983, misses=17, currentsize=17, maxsize=100000)
+[ Info: "treetransposercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "treebraidercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "GLOBAL_FUSIONBLOCKSTRUCTURE_CACHE" => CacheInfo(; hits=421044, misses=23, currentsize=23, maxsize=10000)
+[ Info: SU iter 500    :  dt = 1e-02,  weight diff = 3.879e-06,  time = 0.002 sec
+[ Info: Space of x-weight at [1, 1] = ℂ^4
+[ Info: "memory usage (GB)" => 1.04754638671875
+[ Info: "treepermutercache" => CacheInfo(; hits=79847, misses=17, currentsize=17, maxsize=100000)
+[ Info: "treetransposercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "treebraidercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "GLOBAL_FUSIONBLOCKSTRUCTURE_CACHE" => CacheInfo(; hits=501876, misses=23, currentsize=23, maxsize=10000)
+[ Info: SU conv 596    :  dt = 1e-02,  weight diff = 9.933e-07,  time = 19.102 sec
+[ Info: Space of x-weight at [1, 1] = ℂ^4
+[ Info: "memory usage (GB)" => 1.04754638671875
+[ Info: "treepermutercache" => CacheInfo(; hits=79981, misses=17, currentsize=17, maxsize=100000)
+[ Info: "treetransposercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "treebraidercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "GLOBAL_FUSIONBLOCKSTRUCTURE_CACHE" => CacheInfo(; hits=502742, misses=23, currentsize=23, maxsize=10000)
+[ Info: SU iter 1      :  dt = 1e-03,  weight diff = 2.135e-03,  time = 0.002 sec
+[ Info: Space of x-weight at [1, 1] = ℂ^4
+[ Info: "memory usage (GB)" => 1.04754638671875
+[ Info: "treepermutercache" => CacheInfo(; hits=146847, misses=17, currentsize=17, maxsize=100000)
+[ Info: "treetransposercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "treebraidercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "GLOBAL_FUSIONBLOCKSTRUCTURE_CACHE" => CacheInfo(; hits=922900, misses=23, currentsize=23, maxsize=10000)
+[ Info: SU iter 500    :  dt = 1e-03,  weight diff = 9.632e-07,  time = 0.002 sec
+[ Info: Space of x-weight at [1, 1] = ℂ^4
+[ Info: "memory usage (GB)" => 1.0477447509765625
+[ Info: "treepermutercache" => CacheInfo(; hits=213847, misses=17, currentsize=17, maxsize=100000)
+[ Info: "treetransposercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "treebraidercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "GLOBAL_FUSIONBLOCKSTRUCTURE_CACHE" => CacheInfo(; hits=1343900, misses=23, currentsize=23, maxsize=10000)
+[ Info: SU iter 1000   :  dt = 1e-03,  weight diff = 2.415e-07,  time = 0.002 sec
+[ Info: Space of x-weight at [1, 1] = ℂ^4
+[ Info: "memory usage (GB)" => 1.0477447509765625
+[ Info: "treepermutercache" => CacheInfo(; hits=280847, misses=17, currentsize=17, maxsize=100000)
+[ Info: "treetransposercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "treebraidercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "GLOBAL_FUSIONBLOCKSTRUCTURE_CACHE" => CacheInfo(; hits=1764900, misses=23, currentsize=23, maxsize=10000)
+[ Info: SU iter 1500   :  dt = 1e-03,  weight diff = 6.291e-08,  time = 0.002 sec
+[ Info: Space of x-weight at [1, 1] = ℂ^4
+[ Info: "memory usage (GB)" => 1.0477447509765625
+[ Info: "treepermutercache" => CacheInfo(; hits=347847, misses=17, currentsize=17, maxsize=100000)
+[ Info: "treetransposercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "treebraidercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "GLOBAL_FUSIONBLOCKSTRUCTURE_CACHE" => CacheInfo(; hits=2185900, misses=23, currentsize=23, maxsize=10000)
+[ Info: SU iter 2000   :  dt = 1e-03,  weight diff = 1.683e-08,  time = 0.002 sec
+[ Info: Space of x-weight at [1, 1] = ℂ^4
+[ Info: "memory usage (GB)" => 1.0477447509765625
+[ Info: "treepermutercache" => CacheInfo(; hits=375317, misses=17, currentsize=17, maxsize=100000)
+[ Info: "treetransposercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "treebraidercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "GLOBAL_FUSIONBLOCKSTRUCTURE_CACHE" => CacheInfo(; hits=2358510, misses=23, currentsize=23, maxsize=10000)
+[ Info: SU conv 2205   :  dt = 1e-03,  weight diff = 9.978e-09,  time = 4.532 sec
+[ Info: Space of x-weight at [1, 1] = ℂ^4
+[ Info: "memory usage (GB)" => 1.0477447509765625
+[ Info: "treepermutercache" => CacheInfo(; hits=375451, misses=17, currentsize=17, maxsize=100000)
+[ Info: "treetransposercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "treebraidercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "GLOBAL_FUSIONBLOCKSTRUCTURE_CACHE" => CacheInfo(; hits=2359376, misses=23, currentsize=23, maxsize=10000)
+[ Info: SU iter 1      :  dt = 4e-04,  weight diff = 1.418e-04,  time = 0.002 sec
+[ Info: Space of x-weight at [1, 1] = ℂ^4
+[ Info: "memory usage (GB)" => 1.0477447509765625
+[ Info: "treepermutercache" => CacheInfo(; hits=442317, misses=17, currentsize=17, maxsize=100000)
+[ Info: "treetransposercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "treebraidercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "GLOBAL_FUSIONBLOCKSTRUCTURE_CACHE" => CacheInfo(; hits=2779534, misses=23, currentsize=23, maxsize=10000)
+[ Info: SU iter 500    :  dt = 4e-04,  weight diff = 6.377e-08,  time = 0.002 sec
+[ Info: Space of x-weight at [1, 1] = ℂ^4
+[ Info: "memory usage (GB)" => 1.0477447509765625
+[ Info: "treepermutercache" => CacheInfo(; hits=509317, misses=17, currentsize=17, maxsize=100000)
+[ Info: "treetransposercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "treebraidercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "GLOBAL_FUSIONBLOCKSTRUCTURE_CACHE" => CacheInfo(; hits=3200534, misses=23, currentsize=23, maxsize=10000)
+[ Info: SU iter 1000   :  dt = 4e-04,  weight diff = 3.544e-08,  time = 0.002 sec
+[ Info: Space of x-weight at [1, 1] = ℂ^4
+[ Info: "memory usage (GB)" => 1.047882080078125
+[ Info: "treepermutercache" => CacheInfo(; hits=576317, misses=17, currentsize=17, maxsize=100000)
+[ Info: "treetransposercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "treebraidercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "GLOBAL_FUSIONBLOCKSTRUCTURE_CACHE" => CacheInfo(; hits=3621534, misses=23, currentsize=23, maxsize=10000)
+[ Info: SU iter 1500   :  dt = 4e-04,  weight diff = 2.013e-08,  time = 0.002 sec
+[ Info: Space of x-weight at [1, 1] = ℂ^4
+[ Info: "memory usage (GB)" => 1.047882080078125
+[ Info: "treepermutercache" => CacheInfo(; hits=643317, misses=17, currentsize=17, maxsize=100000)
+[ Info: "treetransposercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "treebraidercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "GLOBAL_FUSIONBLOCKSTRUCTURE_CACHE" => CacheInfo(; hits=4042534, misses=23, currentsize=23, maxsize=10000)
+[ Info: SU iter 2000   :  dt = 4e-04,  weight diff = 1.157e-08,  time = 0.002 sec
+[ Info: Space of x-weight at [1, 1] = ℂ^4
+[ Info: "memory usage (GB)" => 1.047882080078125
+[ Info: "treepermutercache" => CacheInfo(; hits=661139, misses=17, currentsize=17, maxsize=100000)
+[ Info: "treetransposercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "treebraidercache" => CacheInfo(; hits=0, misses=0, currentsize=0, maxsize=100000)
+[ Info: "GLOBAL_FUSIONBLOCKSTRUCTURE_CACHE" => CacheInfo(; hits=4154520, misses=23, currentsize=23, maxsize=10000)
+[ Info: SU conv 2133   :  dt = 4e-04,  weight diff = 9.999e-09,  time = 4.361 sec
+[ Info: CTMRG init:     obj = +8.705922473428e-05       err = 1.0000e+00
+[ Info: CTMRG conv 15:  obj = +9.514115681068e-01       err = 6.9254047025e-11  time = 6.95 sec
+Dict{String, Any} with 3 entries:
+  "mag_norm" => [0.376957 0.376957; 0.376957 0.376957]
+  "mag" => [[0.0319965 -0.0298026; -0.0298026 0.0319965], [2.12045e-12 -1.23728e-12; -1.93334e-12 1.05427e-12], [0.375596 -0.375777; -0.375777 0.375596]]
+  "e_site" => -0.667469
+[ Info: Energy = -0.66746856
+[ Info: Staggered magnetization = 0.37695651

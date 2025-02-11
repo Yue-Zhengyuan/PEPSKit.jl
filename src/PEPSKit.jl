@@ -12,7 +12,9 @@ using MPSKitModels
 using FiniteDifferences
 using Accessors: @set
 using OhMyThreads: tmap
+using LRUCache
 
+include("utility/memory_test.jl")
 include("utility/util.jl")
 include("utility/diffable_threads.jl")
 include("utility/svd.jl")

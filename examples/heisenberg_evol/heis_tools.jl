@@ -7,6 +7,12 @@ using Random
 import Statistics: mean
 using TensorKit
 using PEPSKit
+using LRUCache
+
+# resize!(TensorKit.treepermutercache; maxsize=1000)
+# resize!(TensorKit.treetransposercache; maxsize=1000)
+# resize!(TensorKit.treebraidercache; maxsize=1000)
+# resize!(TensorKit.GLOBAL_FUSIONBLOCKSTRUCTURE_CACHE; maxsize=1000)
 
 module MeasureHeis
 

@@ -218,6 +218,7 @@ function fullupdate(
         peps, envs, wts, (fid, cost) = fu_iter(gate, peps, envs, fu_alg)
         wtdiff = (count == 1) ? NaN : compare_weights(wts, wts0)
         wts0 = deepcopy(wts)
+        show_memory_info()
         time1 = time()
         if count == 1 || count % fu_alg.reconv_int == 0
             # reconverge environment
