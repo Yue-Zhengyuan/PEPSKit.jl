@@ -58,15 +58,15 @@ function bondenv_fu(row::Int, col::Int, X::PEPSOrth, Y::PEPSOrth, env::CTMRGEnv)
         t1Y[χ6, DNY0, DNY1, χ8]
     )
     # combine
-    @autoopt @tensor env[DX1, DY1; DX0, DY0] := (
+    @autoopt @tensor benv[DX1, DY1; DX0, DY0] := (
         lhalf[DX1, DX0, χ5, χ6] * rhalf[DY1, DY0, χ5, χ6]
     )
-    @assert [isdual(space(env, ax)) for ax in 1:4] == [0, 0, 1, 1]
-    return env / norm(env, Inf)
+    @assert [isdual(space(benv, ax)) for ax in 1:4] == [0, 0, 1, 1]
+    return benv / norm(benv, Inf)
 end
 
 """
-Fix local gauge of the env tensor around a bond
+Fix local gauge of the bond environment (decomposed into `Z† Z`)
 """
 function fu_fixgauge(
     Z::AbstractTensorMap{T,S,1,2},

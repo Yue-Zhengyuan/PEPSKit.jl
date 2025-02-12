@@ -54,8 +54,8 @@ function _ntu_bondx!(
     =#
     Y, bL = leftorth(B, ((2, 3, 4), (1, 5)); alg=QRpos())
     bL, Y = permute(bL, (3, 2, 1)), permute(Y, (1, 2, 3, 4))
-    env = bondenv_ntu(row, col, X, Y, peps, alg.bondenv_alg)
-    @assert [isdual(space(env, ax)) for ax in 1:4] == [0, 0, 1, 1]
+    benv = bondenv_ntu(row, col, X, Y, peps, alg.bondenv_alg)
+    @assert [isdual(space(benv, ax)) for ax in 1:4] == [0, 0, 1, 1]
     #= apply gate
 
             -2         -3
@@ -72,7 +72,7 @@ function _ntu_bondx!(
     aR, bL = absorb_s(aR, s, bL)
     aR, bL = permute(aR, (1, 2, 3)), permute(bL, (1, 2, 3))
     # optimize aR, bL
-    aR, s, bL, (cost, fid) = bond_optimize(env, aR, bL, alg.opt_alg)
+    aR, s, bL, (cost, fid) = bond_optimize(benv, aR, bL, alg.opt_alg)
     #= update and normalize peps, ms
 
             -2        -1               -1     -2

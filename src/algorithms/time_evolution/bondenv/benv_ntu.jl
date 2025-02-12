@@ -42,21 +42,21 @@ function bondenv_ntu(
                 (+1 +0) ══ Db ══ (+1 +1)    
     =#
     # bottom-left half
-    @autoopt @tensor env_bl[Dbr1 Dbr0 Dl1 Dl0 Dtl1 Dtl0] :=
+    @autoopt @tensor benv_bl[Dbr1 Dbr0 Dl1 Dl0 Dtl1 Dtl0] :=
         cor_br(m[1, 1])[Dbr1 Dbr0 Db1 Db0] *
         cor_bl(m[1, 0])[Dbl1 Dbl0 Db1 Db0] *
         edge_l(X, hair_l(m[0, -1]))[Dtl1 Dtl0 Dl1 Dl0 Dbl1 Dbl0]
-    env_bl /= norm(env_bl, Inf)
+    benv_bl /= norm(benv_bl, Inf)
     # top-right half
-    @autoopt @tensor env_tr[Dtl1 Dtl0 Dr1 Dr0 Dbr1 Dbr0] :=
+    @autoopt @tensor benv_tr[Dtl1 Dtl0 Dr1 Dr0 Dbr1 Dbr0] :=
         cor_tl(m[-1, 0])[Dt1 Dt0 Dtl1 Dtl0] *
         cor_tr(m[-1, 1])[Dtr1 Dtr0 Dt1 Dt0] *
         edge_r(Y, hair_r(m[0, 2]))[Dtr1 Dtr0 Dbr1 Dbr0 Dr1 Dr0]
-    env_tr /= norm(env_tr, Inf)
-    @tensor env[Dl1 Dr1; Dl0 Dr0] :=
-        env_bl[Dbr1 Dbr0 Dl1 Dl0 Dtl1 Dtl0] * env_tr[Dtl1 Dtl0 Dr1 Dr0 Dbr1 Dbr0]
-    @assert [isdual(space(env, ax)) for ax in 1:4] == [0, 0, 1, 1]
-    return env / norm(env, Inf)
+    benv_tr /= norm(benv_tr, Inf)
+    @tensor benv[Dl1 Dr1; Dl0 Dr0] :=
+        benv_bl[Dbr1 Dbr0 Dl1 Dl0 Dtl1 Dtl0] * benv_tr[Dtl1 Dtl0 Dr1 Dr0 Dbr1 Dbr0]
+    @assert [isdual(space(benv, ax)) for ax in 1:4] == [0, 0, 1, 1]
+    return benv / norm(benv, Inf)
 end
 
 """
@@ -120,9 +120,9 @@ function bondenv_ntu(
         vecr[D21 D20 D31 D30 -3 -4 -5 -6]
     vecr /= norm(vecr, Inf)
     # combine left and right part
-    @tensor env[-1 -2; -3 -4] := vecl[1 2 -1 -3 3 4] * vecr[1 2 -2 -4 3 4]
-    @assert [isdual(space(env, ax)) for ax in 1:4] == [0, 0, 1, 1]
-    return env / norm(env, Inf)
+    @tensor benv[-1 -2; -3 -4] := vecl[1 2 -1 -3 3 4] * vecr[1 2 -2 -4 3 4]
+    @assert [isdual(space(benv, ax)) for ax in 1:4] == [0, 0, 1, 1]
+    return benv / norm(benv, Inf)
 end
 
 """
@@ -222,7 +222,7 @@ function bondenv_ntu(
         vecr[D21 D20 D31 D30 -3 -4 -5 -6]
     vecr /= norm(vecr, Inf)
     # combine left and right part
-    @tensor env[-1 -2; -3 -4] := vecl[1 2 -1 -3 3 4] * vecr[1 2 -2 -4 3 4]
-    @assert [isdual(space(env, ax)) for ax in 1:4] == [0, 0, 1, 1]
-    return env / norm(env, Inf)
+    @tensor benv[-1 -2; -3 -4] := vecl[1 2 -1 -3 3 4] * vecr[1 2 -2 -4 3 4]
+    @assert [isdual(space(benv, ax)) for ax in 1:4] == [0, 0, 1, 1]
+    return benv / norm(benv, Inf)
 end

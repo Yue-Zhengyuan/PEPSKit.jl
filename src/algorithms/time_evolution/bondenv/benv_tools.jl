@@ -28,8 +28,8 @@ function collect_neighbors(
 end
 
 """
-    cal_envboundary(free_axs::Vector{Int}, ket::T, bra::T) where {T<:Union{PEPSTensor,PEPSOrth}}
-    cal_envboundary(free_axs::Vector{Int}, ket::T, bra::T, axts::Vector{H}) where {T<:Union{PEPSTensor,PEPSOrth},H<:Union{Nothing,Hair}}
+    benv_tensor(free_axs::Vector{Int}, ket::T, bra::T) where {T<:Union{PEPSTensor,PEPSOrth}}
+    benv_tensor(free_axs::Vector{Int}, ket::T, bra::T, axts::Vector{H}) where {T<:Union{PEPSTensor,PEPSOrth},H<:Union{Nothing,Hair}}
 
 Contract the physical axes (for PEPSTensor) and the virtual axes of `ket` with `bra` to obtain the tensor on the boundary of the bond environment. Virtual axes specified by `free_axs` (in ascending order) are not contracted. 
 
@@ -73,7 +73,7 @@ Contract the physical axes (for PEPSTensor) and the virtual axes of `ket` with `
         6
 ```
 """
-function cal_envboundary(
+function benv_tensor(
     free_axs::Vector{Int}, ket::T, bra::T
 ) where {T<:Union{PEPSTensor,PEPSOrth}}
     if T <: PEPSTensor
@@ -90,7 +90,7 @@ function cal_envboundary(
     n = length(free_axs)
     return permute(t, Tuple(Iterators.flatten(zip(1:n, (n + 1):(2n)))))
 end
-function cal_envboundary(
+function benv_tensor(
     free_axs::Vector{Int}, ket::T, bra::T, axts::Vector{H}
 ) where {T<:Union{PEPSTensor,PEPSOrth},H<:Union{Nothing,Hair}}
     @assert length(axts) == 4 - length(free_axs)
@@ -153,12 +153,12 @@ const free_ax_edge = Dict(
 for (dir, free_ax) in free_ax_hair
     fname = Symbol("hair_", dir)
     @eval begin
-        $(fname)(ket::PEPSTensor) = cal_envboundary($free_ax, ket, ket)
-        $(fname)(ket::PEPSOrth) = cal_envboundary($(free_ax .- 1), ket, ket)
+        $(fname)(ket::PEPSTensor) = benv_tensor($free_ax, ket, ket)
+        $(fname)(ket::PEPSOrth) = benv_tensor($(free_ax .- 1), ket, ket)
         $(fname)(ket::PEPSTensor, h1, h2, h3) =
-            cal_envboundary($free_ax, ket, ket, [h1, h2, h3])
+            benv_tensor($free_ax, ket, ket, [h1, h2, h3])
         $(fname)(ket::PEPSOrth, h1, h2, h3) =
-            cal_envboundary($(free_ax .- 1), ket, ket, [h1, h2, h3])
+            benv_tensor($(free_ax .- 1), ket, ket, [h1, h2, h3])
     end
 end
 
@@ -166,11 +166,11 @@ end
 for (dir, free_ax) in free_ax_cor
     fname = Symbol("cor_", dir)
     @eval begin
-        $(fname)(ket::PEPSTensor) = cal_envboundary($free_ax, ket, ket)
-        $(fname)(ket::PEPSOrth) = cal_envboundary($(free_ax .- 1), ket, ket)
-        $(fname)(ket::PEPSTensor, h1, h2) = cal_envboundary($free_ax, ket, ket, [h1, h2])
+        $(fname)(ket::PEPSTensor) = benv_tensor($free_ax, ket, ket)
+        $(fname)(ket::PEPSOrth) = benv_tensor($(free_ax .- 1), ket, ket)
+        $(fname)(ket::PEPSTensor, h1, h2) = benv_tensor($free_ax, ket, ket, [h1, h2])
         $(fname)(ket::PEPSOrth, h1, h2) =
-            cal_envboundary($(free_ax .- 1), ket, ket, [h1, h2])
+            benv_tensor($(free_ax .- 1), ket, ket, [h1, h2])
     end
 end
 
@@ -178,10 +178,10 @@ end
 for (dir, free_ax) in free_ax_edge
     fname = Symbol("edge_", dir)
     @eval begin
-        $(fname)(ket::PEPSTensor) = cal_envboundary($free_ax, ket, ket)
-        $(fname)(ket::PEPSOrth) = cal_envboundary($(free_ax .- 1), ket, ket)
-        $(fname)(ket::PEPSTensor, h) = cal_envboundary($free_ax, ket, ket, [h])
-        $(fname)(ket::PEPSOrth, h) = cal_envboundary($(free_ax .- 1), ket, ket, [h])
+        $(fname)(ket::PEPSTensor) = benv_tensor($free_ax, ket, ket)
+        $(fname)(ket::PEPSOrth) = benv_tensor($(free_ax .- 1), ket, ket)
+        $(fname)(ket::PEPSTensor, h) = benv_tensor($free_ax, ket, ket, [h])
+        $(fname)(ket::PEPSOrth, h) = benv_tensor($(free_ax .- 1), ket, ket, [h])
     end
 end
 
@@ -252,11 +252,11 @@ Replace `env` by its positive approximant `Z† Z`
                         |←- 3   4 -→|
 ```
 """
-function positive_approx(env::BondEnv)
-    @assert [isdual(space(env, ax)) for ax in 1:4] == [0, 0, 1, 1]
+function positive_approx(benv::BondEnv)
+    @assert [isdual(space(benv, ax)) for ax in 1:4] == [0, 0, 1, 1]
     # hermitize env, and perform eigen-decomposition
     # env = U D U'
-    D, U = eigh((env + env') / 2)
+    D, U = eigh((benv + benv') / 2)
     # determine if `env` is (mostly) positive or negative
     # if negative, (-1) will be multiplied to `env` through `D`
     sgn = sign(mean(vcat((diag(b) for (k, b) in blocks(D))...)))

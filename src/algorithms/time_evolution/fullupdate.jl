@@ -74,15 +74,15 @@ function _fu_bondx!(
     Y, bL0 = leftorth(B, ((2, 3, 4), (1, 5)); alg=QRpos())
     Y = permute(Y, (1, 2, 3, 4))
     bL0 = permute(bL0, (3, 2, 1))
-    env = bondenv_fu(row, col, X, Y, env)
+    benv = bondenv_fu(row, col, X, Y, env)
     # positive/negative-definite approximant: env = ± Z Z†
-    Z = positive_approx(env)
+    Z = positive_approx(benv)
     # fix gauge
     if alg.fixgauge
         Z, X, Y, aR0, bL0 = fu_fixgauge(Z, X, Y, aR0, bL0)
     end
-    env = Z' * Z
-    @assert [isdual(space(env, ax)) for ax in 1:4] == [0, 0, 1, 1]
+    benv = Z' * Z
+    @assert [isdual(space(benv, ax)) for ax in 1:4] == [0, 0, 1, 1]
     #= apply gate
 
             -2          -3
@@ -101,7 +101,7 @@ function _fu_bondx!(
     aR, bL = absorb_s(aR, s_cut, bL)
     aR, bL = permute(aR, (1, 2, 3)), permute(bL, (1, 2, 3))
     # optimize aR, bL
-    aR, s, bL, (cost, fid) = bond_optimize(env, aR, bL, alg.opt_alg)
+    aR, s, bL, (cost, fid) = bond_optimize(benv, aR, bL, alg.opt_alg)
     aR, bL = absorb_s(aR, s, bL)
     aR /= norm(aR, Inf)
     bL /= norm(bL, Inf)
