@@ -22,21 +22,21 @@ which can be more simply denoted as
 ```
 The axes 1, 2 (or 3, 4) come from X†, Y† (or X, Y)
 """
-function bondenv_fu(row::Int, col::Int, X::PEPSOrth, Y::PEPSOrth, envs::CTMRGEnv)
-    Nr, Nc = size(envs.corners)[[2, 3]]
+function bondenv_fu(row::Int, col::Int, X::PEPSOrth, Y::PEPSOrth, env::CTMRGEnv)
+    Nr, Nc = size(env.corners)[[2, 3]]
     cm1 = _prev(col, Nc)
     cp1 = _next(col, Nc)
     cp2 = _next(cp1, Nc)
     rm1 = _prev(row, Nr)
     rp1 = _next(row, Nr)
-    c1 = envs.corners[1, rm1, cm1]
-    c2 = envs.corners[2, rm1, cp2]
-    c3 = envs.corners[3, rp1, cp2]
-    c4 = envs.corners[4, rp1, cm1]
-    t1X, t1Y = envs.edges[1, rm1, col], envs.edges[1, rm1, cp1]
-    t2 = envs.edges[2, row, cp2]
-    t3X, t3Y = envs.edges[3, rp1, col], envs.edges[3, rp1, cp1]
-    t4 = envs.edges[4, row, cm1]
+    c1 = env.corners[1, rm1, cm1]
+    c2 = env.corners[2, rm1, cp2]
+    c3 = env.corners[3, rp1, cp2]
+    c4 = env.corners[4, rp1, cm1]
+    t1X, t1Y = env.edges[1, rm1, col], env.edges[1, rm1, cp1]
+    t2 = env.edges[2, row, cp2]
+    t3X, t3Y = env.edges[3, rp1, col], env.edges[3, rp1, cp1]
+    t4 = env.edges[4, row, cm1]
     # left half
     @autoopt @tensor lhalf[DX1, DX0, χ5, χ6] := (
         c4[χ3, χ1] *

@@ -94,7 +94,7 @@ end
 # Random.seed!(91283219347)
 # H = heisenberg_XYZ(InfiniteSquare())
 # psi = InfinitePEPS(2, χbond)
-# env = leading_boundary(CTMRGEnv(psi, ComplexSpace(χenv)), psi, ctm_alg);
+# env, = leading_boundary(CTMRGEnv(psi, ComplexSpace(χenv)), psi, ctm_alg);
 # hienv = HalfInfiniteEnv(
 #     env.corners[1],
 #     env.corners[2],

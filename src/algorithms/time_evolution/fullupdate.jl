@@ -17,7 +17,7 @@ Each FU run stops when the energy starts to increase.
 end
 
 """
-    ctmrg_rightmove(col::Int, peps::InfinitePEPS, envs::CTMRGEnv, alg::SequentialCTMRG)
+    ctmrg_rightmove(col::Int, peps::InfinitePEPS, env::CTMRGEnv, alg::SequentialCTMRG)
 
 CTMRG right-move to update CTMRGEnv in the c-th column
 ```
@@ -30,11 +30,11 @@ CTMRG right-move to update CTMRGEnv in the c-th column
         c   c+1
 ```
 """
-function ctmrg_rightmove(col::Int, peps::InfinitePEPS, envs::CTMRGEnv, alg::SequentialCTMRG)
+function ctmrg_rightmove(col::Int, peps::InfinitePEPS, env::CTMRGEnv, alg::SequentialCTMRG)
     Nr, Nc = size(peps)
     @assert 1 <= col <= Nc
-    envs, info = ctmrg_leftmove(Nc + 1 - col, rot180(peps), rot180(envs), alg)
-    return rot180(envs), info
+    env, info = ctmrg_leftmove(Nc + 1 - col, rot180(peps), rot180(env), alg)
+    return rot180(env), info
 end
 
 """
@@ -45,7 +45,7 @@ function _fu_bondx!(
     col::Int,
     gate::AbstractTensorMap{T,S,2,2},
     peps::InfinitePEPS,
-    envs::CTMRGEnv,
+    env::CTMRGEnv,
     alg::FullUpdate,
 ) where {T<:Number,S<:ElementarySpace}
     Nr, Nc = size(peps)
@@ -74,7 +74,7 @@ function _fu_bondx!(
     Y, bL0 = leftorth(B, ((2, 3, 4), (1, 5)); alg=QRpos())
     Y = permute(Y, (1, 2, 3, 4))
     bL0 = permute(bL0, (3, 2, 1))
-    env = bondenv_fu(row, col, X, Y, envs)
+    env = bondenv_fu(row, col, X, Y, env)
     # positive/negative-definite approximant: env = ± Z Z†
     Z = positive_approx(env)
     # fix gauge
@@ -126,7 +126,7 @@ Update all horizontal bonds in the c-th column
 To update rows, rotate the network clockwise by 90 degrees.
 """
 function _update_column!(
-    col::Int, gate::LocalOperator, peps::InfinitePEPS, envs::CTMRGEnv, alg::FullUpdate
+    col::Int, gate::LocalOperator, peps::InfinitePEPS, env::CTMRGEnv, alg::FullUpdate
 )
     Nr, Nc = size(peps)
     @assert 1 <= col <= Nc
@@ -143,48 +143,48 @@ function _update_column!(
     =#
     for row in 1:Nr
         term = get_gateterm(gate, (CartesianIndex(row, col), CartesianIndex(row, col + 1)))
-        wts_col[row], cost, fid = _fu_bondx!(row, col, term, peps, envs, alg)
+        wts_col[row], cost, fid = _fu_bondx!(row, col, term, peps, env, alg)
         costs[row] = cost
         localfid += fid
     end
     # update CTMRGEnv
-    envs2, info = ctmrg_leftmove(col, peps, envs, alg.colmove_alg)
-    envs2, info = ctmrg_rightmove(_next(col, Nc), peps, envs2, alg.colmove_alg)
+    env2, info = ctmrg_leftmove(col, peps, env, alg.colmove_alg)
+    env2, info = ctmrg_rightmove(_next(col, Nc), peps, env2, alg.colmove_alg)
     for c in [col, _next(col, Nc)]
-        envs.corners[:, :, c] = envs2.corners[:, :, c]
-        envs.edges[:, :, c] = envs2.edges[:, :, c]
+        env.corners[:, :, c] = env2.corners[:, :, c]
+        env.edges[:, :, c] = env2.edges[:, :, c]
     end
     return wts_col, localfid, costs
 end
 
 """
-One round of full update on the input InfinitePEPS `peps` and its CTMRGEnv `envs`
+One round of full update on the input InfinitePEPS `peps` and its CTMRGEnv `env`
 
 Reference: Physical Review B 92, 035142 (2015)
 """
-function fu_iter(gate::LocalOperator, peps::InfinitePEPS, envs::CTMRGEnv, alg::FullUpdate)
+function fu_iter(gate::LocalOperator, peps::InfinitePEPS, env::CTMRGEnv, alg::FullUpdate)
     Nr, Nc = size(peps)
     fid, maxcost = 0.0, 0.0
-    peps2, envs2 = deepcopy(peps), deepcopy(envs)
+    peps2, env2 = deepcopy(peps), deepcopy(env)
     wts = Array{PEPSWeight}(undef, 2, Nr, Nc)
     for col in 1:Nc
-        wts[1, :, col], tmpfid, costs = _update_column!(col, gate, peps2, envs2, alg)
+        wts[1, :, col], tmpfid, costs = _update_column!(col, gate, peps2, env2, alg)
         fid += tmpfid
         maxcost = max(maxcost, maximum(costs))
     end
-    peps2, envs2 = rotr90(peps2), rotr90(envs2)
+    peps2, env2 = rotr90(peps2), rotr90(env2)
     gate_rotated = rotr90(gate)
     for row in 1:Nr
         # the row-th column after rotr90 was (Nr+1-row)-th row
         wts[2, Nr + 1 - row, :], tmpfid, costs = _update_column!(
-            row, gate_rotated, peps2, envs2, alg
+            row, gate_rotated, peps2, env2, alg
         )
         fid += tmpfid
         maxcost = max(maxcost, maximum(costs))
     end
-    peps2, envs2 = rotl90(peps2), rotl90(envs2)
+    peps2, env2 = rotl90(peps2), rotl90(env2)
     fid /= (2 * Nr * Nc)
-    return peps2, envs2, SUWeight(wts), (fid, maxcost)
+    return peps2, env2, SUWeight(wts), (fid, maxcost)
 end
 
 """
@@ -193,7 +193,7 @@ After FU stops, the final environment is calculated with CTMRG algorithm `ctm_al
 """
 function fullupdate(
     peps::InfinitePEPS,
-    envs::CTMRGEnv,
+    env::CTMRGEnv,
     ham::LocalOperator,
     fu_alg::FullUpdate,
     ctm_alg::CTMRGAlgorithm,
@@ -211,20 +211,20 @@ function fullupdate(
         "meas(s)"
     )
     gate = get_gate(fu_alg.dt, ham)
-    peps0, envs0, wts0, wts = deepcopy(peps), deepcopy(envs), nothing, nothing
+    peps0, env0, wts0, wts = deepcopy(peps), deepcopy(env), nothing, nothing
     energy0, energy, ediff, wtdiff = Inf, 0.0, 0.0, NaN
     for count in 1:(fu_alg.maxiter)
         time0 = time()
-        peps, envs, wts, (fid, cost) = fu_iter(gate, peps, envs, fu_alg)
+        peps, env, wts, (fid, cost) = fu_iter(gate, peps, env, fu_alg)
         wtdiff = (count == 1) ? NaN : compare_weights(wts, wts0)
         wts0 = deepcopy(wts)
         time1 = time()
         if count == 1 || count % fu_alg.reconv_int == 0
             # reconverge environment
             meast0 = time()
-            println(stderr, "---- FU step $count: reconverging envs ----")
-            envs = leading_boundary(envs, peps, fu_alg.reconv_alg)
-            energy = costfun(peps, envs, ham) / (Nr * Nc)
+            println(stderr, "---- FU step $count: reconverging env ----")
+            env, = leading_boundary(env, peps, fu_alg.reconv_alg)
+            energy = cost_function(peps, env, ham) / (Nr * Nc)
             meast1 = time()
             ediff = energy - energy0
             @printf(
@@ -240,20 +240,20 @@ function fullupdate(
             if ediff > 0
                 @printf("Energy starts to increase. Abort evolution.\n")
                 # restore last checkpoint
-                peps, envs, energy = deepcopy(peps0), deepcopy(envs0), energy0
+                peps, env, energy = deepcopy(peps0), deepcopy(env0), energy0
                 break
             end
-            peps0, envs0, energy0 = deepcopy(peps), deepcopy(envs), energy
+            peps0, env0, energy0 = deepcopy(peps), deepcopy(env), energy
         end
     end
     # reconverge the environment tensors
     for io in (stdout, stderr)
-        @printf(io, "Reconverging final envs ... \n")
+        @printf(io, "Reconverging final env ... \n")
     end
-    envs = leading_boundary(envs, peps, ctm_alg)
-    energy = costfun(peps, envs, ham) / (Nr * Nc)
+    env, = leading_boundary(env, peps, ctm_alg)
+    energy = cost_function(peps, env, ham) / (Nr * Nc)
     time_end = time()
     @printf("Evolution time: %.3f s\n\n", time_end - time_start)
     print(stderr, "\n----------\n\n")
-    return peps, envs, (; energy, ediff, wtdiff)
+    return peps, env, (; energy, ediff, wtdiff)
 end

@@ -12,16 +12,16 @@ for dt in dts
         opt_alg=FullEnvTruncation(; trscheme=trscheme_peps),
         # opt_alg=ALSTruncation(; trscheme=trscheme_peps),
         ctm_alg=SequentialCTMRG(;
-            tol=1e-7, verbosity=2, maxiter=30, trscheme=trscheme_envs
+            tol=1e-7, verbosity=2, maxiter=30, trscheme=trscheme_env
         ),
     )
-    result = ntupdate(peps, envs, ham, alg, ctm_alg; bipartite=true)
+    result = ntupdate(peps, env, ham, alg, ctm_alg; bipartite=true)
     global peps = result[1]
-    global envs = result[2]
+    global env = result[2]
 end
 # measure physical quantities with CTMRG
 peps_ = InfinitePEPS(peps)
-meas = measure_heis(peps_, ham, envs)
+meas = measure_heis(peps_, ham, env)
 display(meas)
 @info @sprintf("Energy = %.8f\n", meas["e_site"])
 @info @sprintf("Staggered magnetization = %.8f\n", mean(meas["mag_norm"]))
