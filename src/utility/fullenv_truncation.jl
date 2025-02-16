@@ -196,8 +196,8 @@ function fullenv_truncate(
 ) where {T<:Number,S<:ElementarySpace}
     verbose = (alg.check_int > 0)
     time00 = time()
-    # initialize u, s, vh with (almost) untruncated SVD
-    u, s, vh = tsvd(b0, ((1,), (2,)); trunc=truncerr(1e-14))
+    # initialize u, s, vh with truncated SVD
+    u, s, vh = tsvd(b0, ((1,), (2,)); trunc=alg.trscheme)
     # normalize `s` (bond matrices can always be normalized)
     s /= norm(s, Inf)
     s0 = deepcopy(s)
