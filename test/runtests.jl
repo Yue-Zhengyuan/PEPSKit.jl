@@ -45,6 +45,9 @@ end
         @time @safetestset "Iterative optimization after truncation" begin
             include("bondenv/optimize.jl")
         end
+        @time @safetestset "Positiveness of bond environments" begin
+            include("bondenv/positive.jl")
+        end
     end
     if GROUP == "ALL" || GROUP == "UTILITY"
         @time @safetestset "SVD wrapper" begin
