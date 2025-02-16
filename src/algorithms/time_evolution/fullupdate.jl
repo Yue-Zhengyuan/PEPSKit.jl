@@ -101,7 +101,7 @@ function _fu_bondx!(
     aR, bL = absorb_s(aR, s_cut, bL)
     aR, bL = permute(aR, (1, 2, 3)), permute(bL, (1, 2, 3))
     # optimize aR, bL
-    aR, s, bL, (cost, fid) = bond_optimize(benv, aR, bL, alg.opt_alg)
+    aR, s, bL, (cost, fid) = bond_optimize(aR, bL, benv, alg.opt_alg)
     aR, bL = absorb_s(aR, s, bL)
     aR /= norm(aR, Inf)
     bL /= norm(bL, Inf)

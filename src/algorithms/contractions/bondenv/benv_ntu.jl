@@ -1,7 +1,7 @@
 """
 Neighborhood tensor update (NTU) algorithms to construct bond environment.
 """
-abstract type NTUEnvAlgorithm <: BondEnvAlgorithm end
+abstract type NTUEnvAlgorithm end
 
 """
 Construct the "NTU-NN" bond environment. 

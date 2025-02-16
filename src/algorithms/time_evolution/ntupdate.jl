@@ -8,7 +8,7 @@ Each NTU run stops when energy starts to increase.
     # maximum weight difference for convergence
     tol::Float64
     # algorithm to construct bond environment (metric)
-    bondenv_alg::BondEnvAlgorithm
+    bondenv_alg::NTUEnvAlgorithm
     # bond truncation after applying time evolution gate
     opt_alg::Union{ALSTruncation,FullEnvTruncation}
     # monitor energy every `ctm_int` steps
@@ -72,7 +72,7 @@ function _ntu_bondx!(
     aR, bL = absorb_s(aR, s, bL)
     aR, bL = permute(aR, (1, 2, 3)), permute(bL, (1, 2, 3))
     # optimize aR, bL
-    aR, s, bL, (cost, fid) = bond_optimize(benv, aR, bL, alg.opt_alg)
+    aR, s, bL, (cost, fid) = bond_optimize(aR, bL, benv, alg.opt_alg)
     #= update and normalize peps, ms
 
             -2        -1               -1     -2

@@ -1,3 +1,6 @@
+const Hair{T,S} = AbstractTensor{T,S,2} where {T<:Number,S<:ElementarySpace}
+const PEPSOrth{T,S} = AbstractTensor{T,S,4} where {T<:Number,S<:ElementarySpace}
+
 """
 Extract tensors in an infinite PEPS at positions 
 specified in `neighbors` relative to `(row, col)`

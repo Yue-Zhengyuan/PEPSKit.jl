@@ -24,10 +24,7 @@ Vbond = Vint' ⊗ Vint
 
 # random positive-definite environment
 Z = randn(Float64, Vext ← Vbond)
-env = Z' * Z
-@assert env ≈ env'
-D, U = eigh(env)
-@assert all(D.data .>= 0.0)
+benv = Z' * Z
 
 # untruncated bond tensor
 a2b2 = randn(Float64, Vint' ⊗ Vphy ⊗ Vphy ⊗ Vint)
@@ -36,20 +33,20 @@ a2, b2 = _postprocess(a2, s, b2)
 # bond tensor (truncated SVD initialization)
 a0, s, b0 = tsvd(a2b2, ((1, 2), (3, 4)); trunc=trscheme)
 a0, b0 = _postprocess(a0, s, b0)
-fid0 = PEPSKit.fidelity(env, PEPSKit._combine_ab(a0, b0), a2b2)
+fid0 = PEPSKit.fidelity(benv, PEPSKit._combine_ab(a0, b0), a2b2)
 @info "Fidelity of simple SVD truncation = $fid0.\n"
 
 maxiter = 200
 ss = Dict{String,DiagonalTensorMap}()
 for (label, alg) in (
-    ("ALS", ALSTruncation(; trscheme, maxiter, check_int=10)),
-    ("FET", FullEnvTruncation(; trscheme, maxiter, check_int=10)),
+    ("ALS", ALSTruncation(; trscheme, maxiter, check_interval=10)),
+    ("FET", FullEnvTruncation(; trscheme, maxiter, check_interval=10)),
 )
-    a1, ss[label], b1, info = PEPSKit.bond_optimize(env, a2, b2, alg)
+    a1, ss[label], b1, info = PEPSKit.bond_optimize(a2, b2, benv, alg)
     @info "$label improved fidelity = $(info.fid)."
     display(ss[label])
     a1, b1 = _postprocess(a1, ss[label], b1)
-    @test info.fid ≈ PEPSKit.fidelity(env, PEPSKit._combine_ab(a1, b1), a2b2)
+    @test info.fid ≈ PEPSKit.fidelity(benv, PEPSKit._combine_ab(a1, b1), a2b2)
     @test info.fid > fid0
 end
 @test isapprox(ss["ALS"], ss["FET"], atol=1e-3)

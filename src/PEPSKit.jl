@@ -42,6 +42,10 @@ include("environments/vumps_environments.jl")
 include("algorithms/contractions/ctmrg_contractions.jl")
 include("algorithms/contractions/localoperator.jl")
 include("algorithms/contractions/vumps_contractions.jl")
+include("algorithms/contractions/bondenv/benv_tools.jl")
+include("algorithms/contractions/bondenv/als_solve.jl")
+include("algorithms/contractions/bondenv/benv_ntu.jl")
+include("algorithms/contractions/bondenv/benv_ctm.jl")
 
 include("algorithms/ctmrg/sparse_environments.jl")
 include("algorithms/ctmrg/ctmrg.jl")
@@ -51,6 +55,7 @@ include("algorithms/ctmrg/sequential.jl")
 include("algorithms/ctmrg/gaugefix.jl")
 
 include("algorithms/time_evolution/evoltools.jl")
+include("algorithms/time_evolution/optimize.jl")
 include("algorithms/time_evolution/simpleupdate.jl")
 include("algorithms/time_evolution/ntupdate.jl")
 include("algorithms/time_evolution/fullupdate.jl")
@@ -217,8 +222,8 @@ export fixedpoint
 
 export absorb_weight
 export ALSTruncation, FullEnvTruncation, fullenv_truncate
-export su_iter, simpleupdate, SimpleUpdate
 export NTUEnvNN, NTUEnvNNN, NTUEnvNNNp
+export su_iter, simpleupdate, SimpleUpdate
 export ntu_iter, ntupdate, NTUpdate
 export fu_iter, fullupdate, FullUpdate
 
