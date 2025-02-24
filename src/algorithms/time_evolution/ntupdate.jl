@@ -37,20 +37,20 @@ function _ntu_bondx!(
     B = _absorb_weight(B, row, cp1, "", peps.weights)
     #= QR and LQ decomposition
 
-        2   1               1             2
-        | ↗                 |            ↗
+        2   1               1
+        | ↗                 |
     5 - A ← 3   ====>   4 - X ← 2   1 ← aR ← 3
-        |                   |
-        4                   3
+        |                   |            ↘
+        4                   3             2
     =#
     X, aR = leftorth(A, ((2, 4, 5), (1, 3)); alg=QRpos())
     X, aR = permute(X, (1, 4, 2, 3)), permute(aR, (1, 2, 3))
     #=
-        2   1                 2         2
-        | ↗                 ↗           |
+        2   1                           2
+        | ↗                             |
     5 ← B - 3   ====>  1 ← bL → 3   1 → Y - 3
-        |                               |
-        4                               4
+        |                   ↘           |
+        4                     2         4
     =#
     Y, bL = leftorth(B, ((2, 3, 4), (1, 5)); alg=QRpos())
     bL, Y = permute(bL, (3, 2, 1)), permute(Y, (1, 2, 3, 4))
@@ -58,31 +58,30 @@ function _ntu_bondx!(
     @assert [isdual(space(benv, ax)) for ax in 1:4] == [0, 0, 1, 1]
     #= apply gate
 
-            -2         -3
-            ↑           ↑
-            |----gate---|
-            ↑           ↑
-            1           2
-            ↑           ↑
         -1← aR -← 3 -← bL ← -4
+            ↓           ↓
+            1           2
+            ↓           ↓
+            |----gate---|
+            ↓           ↓
+            -2         -3
     =#
     @tensor aR2bL2[-1 -2; -3 -4] := gate[-2 -3; 1 2] * aR[-1 1 3] * bL[3 2 -4]
     # initialize aR, bL using un-truncated SVD
     aR, s, bL, ϵ = tsvd(aR2bL2; trunc=truncerr(1e-15), alg=TensorKit.SVD())
     aR, bL = absorb_s(aR, s, bL)
-    aR, bL = permute(aR, (1, 2, 3)), permute(bL, (1, 2, 3))
     # optimize aR, bL
-    aR, s, bL, (cost, fid) = bond_optimize(aR, bL, benv, alg.opt_alg)
+    aR, s, bL, (cost, fid) = bond_truncate(aR, bL, benv, alg.opt_alg)
     #= update and normalize peps, ms
 
-            -2        -1               -1     -2
-            |        ↗                ↗       |
-        -5- X ← 1 ← aR ← -3     -5 ← bL → 1 → Y - -3
+            -2                                -2
             |                                 |
-            -4                                -4
+        -5- X ← 1 ← aR ← -3     -5 ← bL → 1 → Y - -3
+            |        ↘                ↘       |
+            -4        -1               -1     -4
     =#
-    @tensor A[-1; -2 -3 -4 -5] := X[-2, 1, -4, -5] * aR[1, -1, -3]
-    @tensor B[-1; -2 -3 -4 -5] := bL[-5, -1, 1] * Y[-2, -3, -4, 1]
+    @tensor A[-1; -2 -3 -4 -5] := X[-2 1 -4 -5] * aR[1 -1 -3]
+    @tensor B[-1; -2 -3 -4 -5] := bL[-5 -1 1] * Y[-2 -3 -4 1]
     # remove bond weights
     for ax in (2, 4, 5)
         A = absorb_weight(A, row, col, ax, peps.weights; sqrtwt=true, invwt=true)

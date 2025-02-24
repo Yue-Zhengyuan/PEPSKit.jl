@@ -3,6 +3,7 @@ module PEPSKit
 using LinearAlgebra, Statistics, Base.Threads, Base.Iterators, Printf
 using Base: @kwdef
 using Compat
+using Accessors: @set
 using VectorInterface
 using TensorKit, KrylovKit, MPSKit, OptimKit, TensorOperations
 using ChainRulesCore, Zygote
@@ -10,7 +11,6 @@ using LoggingExtras
 using MPSKit: loginit!, logiter!, logfinish!, logcancel!
 using MPSKitModels
 using FiniteDifferences
-using Accessors: @set
 using OhMyThreads: tmap
 
 include("utility/util.jl")
@@ -21,9 +21,9 @@ include("utility/mirror.jl")
 include("utility/diffset.jl")
 include("utility/hook_pullback.jl")
 include("utility/autoopt.jl")
-include("utility/fullenv_truncation.jl")
 
 include("networks/tensors.jl")
+include("networks/local_sandwich.jl")
 include("networks/infinitesquarenetwork.jl")
 
 include("states/infinitepeps.jl")
@@ -54,8 +54,10 @@ include("algorithms/ctmrg/simultaneous.jl")
 include("algorithms/ctmrg/sequential.jl")
 include("algorithms/ctmrg/gaugefix.jl")
 
+include("algorithms/bond_truncation/fullenv_truncation.jl")
+include("algorithms/bond_truncation/bond_truncation.jl")
+
 include("algorithms/time_evolution/evoltools.jl")
-include("algorithms/time_evolution/optimize.jl")
 include("algorithms/time_evolution/simpleupdate.jl")
 include("algorithms/time_evolution/ntupdate.jl")
 include("algorithms/time_evolution/fullupdate.jl")
@@ -215,18 +217,19 @@ export SVDAdjoint, IterSVD
 export CTMRGEnv, SequentialCTMRG, SimultaneousCTMRG
 export FixedSpaceTruncation, HalfInfiniteProjector, FullInfiniteProjector
 export LocalOperator
-export expectation_value, cost_function, product_peps, correlation_length
+export expectation_value, cost_function, product_peps, correlation_length, network_value
 export leading_boundary
 export PEPSOptimize, GeomSum, ManualIter, LinSolver, EigSolver
 export fixedpoint
 
 export absorb_weight
-export ALSTruncation, FullEnvTruncation, fullenv_truncate
+export ALSTruncation, FullEnvTruncation
 export NTUEnvNN, NTUEnvNNN, NTUEnvNNNp
 export su_iter, simpleupdate, SimpleUpdate
 export ntu_iter, ntupdate, NTUpdate
 export fu_iter, fullupdate, FullUpdate
 
+export InfiniteSquareNetwork
 export InfinitePartitionFunction
 export InfinitePEPS, InfiniteTransferPEPS
 export SUWeight, InfiniteWeightPEPS

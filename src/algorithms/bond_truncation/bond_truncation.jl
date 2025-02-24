@@ -1,8 +1,12 @@
 """
     ALSTruncation
 
-Algorithm struct for the alternating least square optimization step in full update. 
-`tol` is the maximum fidelity change between two optimization steps.
+Algorithm struct for the alternating least square (ALS) optimization of a bond. 
+
+- `trscheme::Bool`: SVD truncation scheme when initilizing the truncated tensors connected by the bond.
+- `maxiter::Int`: Maximal number of ALS iterations.
+- `tol::Float64`: ALS converges when fidelity change between two FET iterations is smaller than `tol`.
+- `check_interval::Int`: Set number of iterations to print information. Output is suppressed when `check_interval <= 0`. 
 """
 @kwdef struct ALSTruncation
     trscheme::TensorKit.TruncationScheme
@@ -20,35 +24,35 @@ function _als_message(
     time_elapsed::Float64,
 )
     return @sprintf(
-        "%5d, fid = %.8e, Δfid = %.8e, time = %.2e s\n", iter, fid, Δfid, time_elapsed
+        "%5d, fid = %.8e, Δfid = %.8e, time = %.4f s\n", iter, fid, Δfid, time_elapsed
     ) * @sprintf("      cost = %.3e,   Δcost/cost0 = %.3e", cost, Δcost)
 end
 
 """
-    bond_optimize(a::AbstractTensor{T,S,3}, b::AbstractTensor{T,S,3}, benv::BondEnv{T,S}, alg) where {T<:Number,S<:ElementarySpace}
+    bond_truncate(a::AbstractTensorMap{T,S,2,1}, b::AbstractTensorMap{T,S,1,2}, benv::BondEnv{T,S}, alg) where {T<:Number,S<:ElementarySpace}
 
 After time-evolving the reduced tensors `a` and `b` connected by a bond, 
 truncate the bond dimension using the bond environment tensor `benv`.
 ```
     ┌-----------------------┐
     |   ┌----┐              |
-    └---|    |-- a† == b† --┘
-        |benv|   ↑     ↑
-    ┌---|    |-- a === b ---┐
+    └---|    |-- a === b ---┘
+        |benv|   ↓     ↓
+    ┌---|    |-- a† == b† --┐
     |   └----┘              |
     └-----------------------┘
 ```
 The truncation algorithm `alg` can be either `FullEnvTruncation` or `ALSTruncation`. 
 The index order of `a` or `b` is
 ```
-        2
-        ↑
     1 -a/b- 3
+        ↓       a[1 2; 3]
+        2       b[1; 2 3]
 ```
 """
-function bond_optimize(
-    a::AbstractTensor{T,S,3},
-    b::AbstractTensor{T,S,3},
+function bond_truncate(
+    a::AbstractTensorMap{T,S,2,1},
+    b::AbstractTensorMap{T,S,1,2},
     benv::BondEnv{T,S},
     alg::ALSTruncation,
 ) where {T<:Number,S<:ElementarySpace}
@@ -60,11 +64,18 @@ function bond_optimize(
     verbose = (alg.check_interval > 0)
     a2b2 = _combine_ab(a, b)
     # initialize truncated aR, bL
-    a, s, b = tsvd(a2b2, ((1, 2), (3, 4)); trunc=alg.trscheme)
+    perm_ab = ((1, 3), (4, 2))
+    a, s, b = tsvd(a2b2, perm_ab; trunc=alg.trscheme)
     s /= norm(s, Inf)
     Vtrunc = space(s, 1)
     a, b = absorb_s(a, s, b)
-    a, b = permute(a, (1, 2, 3)), permute(b, (1, 2, 3))
+    #= temporarily reorder axes of a and b to
+        1 -a/b- 2
+            ↓
+            3
+    =#
+    perm = ((1, 3), (2,))
+    a, b = permute(a, perm), permute(b, perm)
     ab = _combine_ab(a, b)
     # cost function will be normalized by initial value
     cost00 = cost_function_als(benv, ab, a2b2)
@@ -118,16 +129,15 @@ function bond_optimize(
         end
         converge && break
     end
-    ab = _combine_ab(a, b)
-    a, s, b = tsvd(ab, ((1, 2), (3, 4)); trunc=truncspace(Vtrunc), alg=TensorKit.SVD())
+    a, s, b = tsvd(_combine_ab(a, b), perm_ab; trunc=alg.trscheme)
     # normalize singular value spectrum
     s /= norm(s, Inf)
     return a, s, b, (; fid, Δfid)
 end
 
-function bond_optimize(
-    a::AbstractTensor{T,S,3},
-    b::AbstractTensor{T,S,3},
+function bond_truncate(
+    a::AbstractTensorMap{T,S,2,1},
+    b::AbstractTensorMap{T,S,1,2},
     benv::BondEnv{T,S},
     alg::FullEnvTruncation,
 ) where {T<:Number,S<:ElementarySpace}
@@ -137,33 +147,33 @@ function bond_optimize(
     @assert codomain(benv) == domain(benv)
     #= initialize bond matrix using QR as `Ra Lb`
 
-            ↑    ↑               ↑               ↑
         --- a == b ---   ==>   - Qa - Ra == Rb - Qb -
+            ↓    ↓               ↓               ↓
     =#
-    Qa, Ra = leftorth(a, ((1, 2), (3,)))
-    Qb, Rb = leftorth(b, ((2, 3), (1,)))
+    Qa, Ra = leftorth(a)
+    Rb, Qb = rightorth(b)
     isdual(codomain(Ra, 1)) && twist!(Ra, 1)
-    isdual(codomain(Rb, 1)) && twist!(Rb, 1)
-    @tensor b0[-1 -2] := Ra[-1 1] * Rb[-2 1]
+    isdual(domain(Rb, 1)) && twist!(Rb, 2)
+    @tensor b0[-1; -2] := Ra[-1 1] * Rb[1 -2]
     #= initialize bond environment around `Ra Lb`
 
         ┌--------------------------------------┐
         |   ┌----┐                             |
-        └---|    |- 1 - Qa†- -1   -2 - Qb†- 2 -┘
-            |    |      ↑              ↑
+        └---|    |- 3 - Qa - -3   -4 - Qb - 4 -┘
+            |    |      ↓              ↓
             |benv|      5              6
-            |    |      ↑              ↑
-        ┌---|    |- 3 - Qa - -3   -4 - Qb - 4 -┐
+            |    |      ↓              ↓
+        ┌---|    |- 1 - Qa†- -1   -2 - Qb†- 2 -┐
         |   └----┘                             |
         └--------------------------------------┘
     =#
     @tensor benv2[-1 -2; -3 -4] := (
-        benv[1 2; 3 4] * conj(Qa[1 5 -1]) * conj(Qb[6 2 -2]) * Qa[3 5 -3] * Qb[6 4 -4]
+        benv[1 2; 3 4] * conj(Qa[1 5 -1]) * conj(Qb[-2 6 2]) * Qa[3 5 -3] * Qb[-4 6 4]
     )
     # optimize bond matrix
     u, s, vh, info = fullenv_truncate(b0, benv2, alg)
     # truncate a, b tensors with u, s, vh
     @tensor a[-1 -2; -3] := Qa[-1 -2 3] * u[3 -3]
-    @tensor b[-1; -2 -3] := vh[-1 1] * Qb[-2 -3 1]
+    @tensor b[-1; -2 -3] := vh[-1 1] * Qb[1 -2 -3]
     return a, s, b, info
 end

@@ -1,3 +1,10 @@
+#= 
+The Neighborhood Tensor Update (NTU) code is adapted from
+YASTN (https://github.com/yastn/yastn).
+Copyright 2024 The YASTN Authors. All Rights Reserved.
+Licensed under the Apache License, Version 2.0
+=#
+
 """
 Neighborhood tensor update (NTU) algorithms to construct bond environment.
 """

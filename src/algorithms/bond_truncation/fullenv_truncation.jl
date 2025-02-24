@@ -2,15 +2,20 @@
     FullEnvTruncation
 
 Algorithm struct for the full environment truncation (FET).
+
+- `trscheme::Bool`: SVD truncation scheme when optimizing the new bond matrix.
+- `maxiter::Int`: Maximal number of FET iterations.
+- `tol::Float64`: FET converges when fidelity change between two FET iterations is smaller than `tol`.
+- `trunc_init::Bool`: Controls whether the initialization of the new bond matrix is obtained from truncated SVD of the old bond matrix. 
+- `check_interval::Int`: Set number of iterations to print information. Output is suppressed when `check_interval <= 0`. 
 """
 @kwdef struct FullEnvTruncation
     trscheme::TensorKit.TruncationScheme
     maxiter::Int = 50
     tol::Float64 = 1e-15
+    trunc_init::Bool = true
     check_interval::Int = 0
 end
-
-const BondEnv{T,S} = AbstractTensorMap{T,S,2,2} where {T<:Number,S<:ElementarySpace}
 
 """
 Given the bond environment `benv`, calculate the inner product
@@ -18,17 +23,17 @@ between two states specified by the bond matrices `b1`, `b2`
 ```
             ┌--------------------┐
             |   ┌----┐           |
-            └---|    |---- b1†---┘
+            └---|    |---- b2 ---┘
     ⟨b1|b2⟩ =   |benv|
-            ┌---|    |---- b2 ---┐
+            ┌---|    |---- b1†---┐
             |   └----┘           |
             └--------------------┘
 ```
 """
 function inner_prod(
-    benv::BondEnv{T,S}, b1::AbstractTensor{T,S,2}, b2::AbstractTensor{T,S,2}
+    benv::BondEnv{T,S}, b1::AbstractTensorMap{T,S,1,1}, b2::AbstractTensorMap{T,S,1,1}
 ) where {T<:Number,S<:ElementarySpace}
-    val = @tensor conj(b1[1 2]) * benv[1 2; 3 4] * b2[3 4]
+    val = @tensor conj(b1[1; 2]) * benv[1 2; 3 4] * b2[3; 4]
     return val
 end
 
@@ -40,7 +45,7 @@ between two states specified by the bond matrices `b1`, `b2`
 ```
 """
 function fidelity(
-    benv::BondEnv{T,S}, b1::AbstractTensor{T,S,2}, b2::AbstractTensor{T,S,2}
+    benv::BondEnv{T,S}, b1::AbstractTensorMap{T,S,1,1}, b2::AbstractTensorMap{T,S,1,1}
 ) where {T<:Number,S<:ElementarySpace}
     return abs2(inner_prod(benv, b1, b2)) /
            real(inner_prod(benv, b1, b1) * inner_prod(benv, b2, b2))
@@ -63,11 +68,11 @@ function _fet_message(
     iter::Int, fid::Float64, Δfid::Float64, Δwt::Float64, time_elapsed::Float64
 )
     return @sprintf("%5d: fid = %.8e, Δfid = %.8e, ", iter, fid, Δfid) *
-           @sprintf("|Δs| = %.6e, time = %.2e s", Δwt, time_elapsed)
+           @sprintf("|Δs| = %.6e, time = %.4f s", Δwt, time_elapsed)
 end
 
 """
-    fullenv_truncate(benv::BondEnv{T,S}, b0::AbstractTensor{T,S,2}, alg::FullEnvTruncation) where {T<:Number,S<:ElementarySpace}
+    fullenv_truncate(benv::BondEnv{T,S}, b0::AbstractTensorMap{T,S,1,1}, alg::FullEnvTruncation) where {T<:Number,S<:ElementarySpace}
 
 The full environment truncation algorithm (Physical Review B 98, 085155 (2018)). 
 
@@ -80,17 +85,17 @@ that maximizes the fidelity (not normalized by `⟨b0|b0⟩`)
 
             ┌----------------------┐  ┌-----------------------┐
             |   ┌----┐             |  |   ┌----┐              |
-            └---|    |-u† → s → v -┘  └---|    |------b0† ----┘
+            └---|    |---- b0 -----┘  └---|    |- u ← s ← v† -┘
                 |benv|                    |benv|
-            ┌---|    |---- b0 -----┐  ┌---|    |- u ← s ← v† -┐
+            ┌---|    |-u† → s → v -┐  ┌---|    |----- b0† ----┐
             |   └----┘             |  |   └----┘              |
             └----------------------┘  └-----------------------┘
         = ───────────────────────────────────────────────────────
                         ┌-----------------------┐
                         |   ┌----┐              |
-                        └---|    |- u† → s → v -┘
+                        └---|    |- u ← s ← v† -┘
                             |benv|
-                        ┌---|    |- u ← s ← v† -┐
+                        ┌---|    |- u† → s → v -┐
                         |   └----┘              |
                         └-----------------------┘
 ```
@@ -110,17 +115,17 @@ Define the vector `p` and the positive map `B` as
 ```
         ┌---------------┐   ┌-----------------------┐
         |   ┌---┐       |   |   ┌----┐              |
-        └---|   |-------┘   └---|    |------b0† ----┘
+        └---|   |-←   --┘   └---|    |- u ←      ---┘
             | p†|         =     |benv|
-        ┌---|   |-←   --┐   ┌---|    |- u ←      ---┐
+        ┌---|   |-------┐   ┌---|    |----- b0† ----┐
         |   └---┘       |   |   └----┘              |
         └---------------┘   └-----------------------┘
 
         ┌---------------┐   ┌-----------------------┐
         |   ┌---┐       |   |   ┌----┐              |
-        └---|   |-→   --┘   └---|    |- u†→     ---┘
+        └---|   |-←   --┘   └---|    |- u ←      ---┘
             | B |         =     |benv|
-        ┌---|   |-←   --┐   ┌---|    |- u ←      ---┐
+        ┌---|   |-→   --┐   ┌---|    |- u†→      ---┐
         |   └---┘       |   |   └----┘              |
         └---------------┘   └-----------------------┘
 ```
@@ -157,17 +162,17 @@ Define the vector `p` and the positive map `B` as
 ```
         ┌---------------┐   ┌-----------------------┐
         |   ┌---┐       |   |   ┌----┐              |
-        └---|   |-------┘   └---|    |------b0† ----┘
+        └---|   |-  ←-o-┘   └---|    |--   ←-o- v† -┘
             | p†|         =     |benv|
-        ┌---|   |-  ←-o-┐   ┌---|    |--    ←-o- v†-┐
+        ┌---|   |-------┐   ┌---|    |----- b0† ----┐
         |   └---┘       |   |   └----┘              |
         └---------------┘   └-----------------------┘
 
         ┌---------------┐   ┌-----------------------┐
         |   ┌---┐       |   |   ┌----┐              |
-        └---|   |-  →-o-┘   └---|    |--    →-o- v -┘
+        └---|   |-  ←-o-┘   └---|    |--    ←-o- v†-┘
             | B |         =     |benv|
-        ┌---|   |-  ←-o-┐   ┌---|    |--    ←-o- v†-┐
+        ┌---|   |-  →-o-┐   ┌---|    |--    →-o- v -┐
         |   └---┘       |   |   └----┘              |
         └---------------┘   └-----------------------┘
 ```
@@ -190,14 +195,15 @@ Then the bond matrix `u s v†` is updated by SVD:
 The SVD result of the new bond matrix `u`, `s`, `vh`.
 """
 function fullenv_truncate(
-    b0::AbstractTensor{T,S,2}, benv::BondEnv{T,S}, alg::FullEnvTruncation
+    b0::AbstractTensorMap{T,S,1,1}, benv::BondEnv{T,S}, alg::FullEnvTruncation
 ) where {T<:Number,S<:ElementarySpace}
     verbose = (alg.check_interval > 0)
     # `benv` is assumed to be positive; here we only check codomain(benv) == domain(benv).
     @assert codomain(benv) == domain(benv)
     time00 = time()
-    # initialize u, s, vh with truncated SVD
-    u, s, vh = tsvd(b0, ((1,), (2,)); trunc=alg.trscheme)
+    # initialize u, s, vh with truncated or untruncated SVD
+    u, s, vh = tsvd(b0; trunc=(alg.trunc_init ? alg.trscheme : notrunc()))
+    b1 = similar(b0)
     # normalize `s` (bond matrices can always be normalized)
     s /= norm(s, Inf)
     s0 = deepcopy(s)
@@ -205,27 +211,27 @@ function fullenv_truncate(
     for iter in 1:(alg.maxiter)
         time0 = time()
         # update `← r -  =  ← s ← v† -`
-        @tensor r[-1 -2] := s[-1 1] * vh[1 -2]
-        @tensor p[-1 -2] := conj(u[1 -1]) * benv[1 -2; 3 4] * b0[3 4]
-        @tensor B[-1 -2; -3 -4] := conj(u[1 -1]) * benv[1 -2; 3 -4] * u[3 -3]
+        @tensor r[-1 -2] := s[-1; 1] * vh[1; -2]
+        @tensor p[-1 -2] := conj(u[1; -1]) * benv[1 -2; 3 4] * b0[3; 4]
+        @tensor B[-1 -2; -3 -4] := conj(u[1; -1]) * benv[1 -2; 3 -4] * u[3; -3]
         _linearmap_twist!(p)
         _linearmap_twist!(B)
-        r, info_r = linsolve(x -> B * x, p, r, 0, 1)
-        @tensor b1[-1; -2] := u[-1 1] * r[1 -2]
+        r, info_r = linsolve(Base.Fix1(*, B), p, r, 0, 1)
+        @tensor b1[-1; -2] = u[-1; 1] * r[1 -2]
         u, s, vh = tsvd(b1; trunc=alg.trscheme)
         s /= norm(s, Inf)
         # update `- l ←  =  - u ← s ←`
-        @tensor l[-1 -2] := u[-1 1] * s[1 -2]
-        @tensor p[-1 -2] := conj(vh[-2 2]) * benv[-1 2; 3 4] * b0[3 4]
-        @tensor B[-1 -2; -3 -4] := conj(vh[-2 2]) * benv[-1 2; -3 4] * vh[-4 4]
+        @tensor l[-1 -2] := u[-1; 1] * s[1; -2]
+        @tensor p[-1 -2] := conj(vh[-2; 2]) * benv[-1 2; 3 4] * b0[3; 4]
+        @tensor B[-1 -2; -3 -4] := conj(vh[-2; 2]) * benv[-1 2; -3 4] * vh[-4; 4]
         _linearmap_twist!(p)
         _linearmap_twist!(B)
-        l, info_l = linsolve(x -> B * x, p, l, 0, 1)
-        @tensor b1[-1; -2] := l[-1 1] * vh[1 -2]
-        u, s, vh = tsvd(b1; trunc=alg.trscheme)
+        l, info_l = linsolve(Base.Fix1(*, B), p, l, 0, 1)
+        @tensor b1[-1; -2] = l[-1 1] * vh[1; -2]
+        fid = fidelity(benv, b0, b1)
+        u, s, vh = tsvd!(b1; trunc=alg.trscheme)
         s /= norm(s, Inf)
         # determine convergence
-        fid = fidelity(benv, b0, permute(b1, (1, 2)))
         Δs = (space(s) == space(s0)) ? _singular_value_distance((s, s0)) : NaN
         Δfid = fid - fid0
         s0 = deepcopy(s)

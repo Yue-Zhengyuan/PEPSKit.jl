@@ -1,3 +1,4 @@
+const BondEnv{T,S} = AbstractTensorMap{T,S,2,2} where {T<:Number,S<:ElementarySpace}
 const Hair{T,S} = AbstractTensor{T,S,2} where {T<:Number,S<:ElementarySpace}
 const PEPSOrth{T,S} = AbstractTensor{T,S,4} where {T<:Number,S<:ElementarySpace}
 

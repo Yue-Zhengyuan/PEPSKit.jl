@@ -17,27 +17,6 @@ Each FU run stops when the energy starts to increase.
 end
 
 """
-    ctmrg_rightmove(col::Int, peps::InfinitePEPS, env::CTMRGEnv, alg::SequentialCTMRG)
-
-CTMRG right-move to update CTMRGEnv in the c-th column
-```
-    absorb <---
-    ←-- T1 ← C2     r-1
-        ‖    ↑
-    === M' = T2     r
-        ‖    ↑
-    --→ T3 → C3     r+1
-        c   c+1
-```
-"""
-function ctmrg_rightmove(col::Int, peps::InfinitePEPS, env::CTMRGEnv, alg::SequentialCTMRG)
-    Nr, Nc = size(peps)
-    @assert 1 <= col <= Nc
-    env, info = ctmrg_leftmove(Nc + 1 - col, rot180(peps), rot180(env), alg)
-    return rot180(env), info
-end
-
-"""
 Full update for the bond between `[row, col]` and `[row, col+1]`.
 """
 function _fu_bondx!(
@@ -55,63 +34,60 @@ function _fu_bondx!(
     @assert !isdual(domain(A)[2])
     #= QR and LQ decomposition
 
-        2   1               1             2
-        | ↗                 |            ↗
+        2   1               1
+        | ↗                 |
     5 - A ← 3   ====>   4 - X ← 2   1 ← aR ← 3
-        |                   |
-        4                   3
+        |                   |            ↘
+        4                   3             2
     =#
-    X, aR0 = leftorth(A, ((2, 4, 5), (1, 3)); alg=QRpos())
+    X, aR = leftorth(A, ((2, 4, 5), (1, 3)); alg=QRpos())
     X = permute(X, (1, 4, 2, 3))
-    aR0 = permute(aR0, (1, 2, 3))
+    aR = permute(aR, (1, 2, 3))
     #=
-        2   1                 2         2
-        | ↗                 ↗           |
+        2   1                           2
+        | ↗                             |
     5 ← B - 3   ====>  1 ← bL → 3   1 → Y - 3
-        |                               |
-        4                               4
+        |                   ↘           |
+        4                     2         4
     =#
-    Y, bL0 = leftorth(B, ((2, 3, 4), (1, 5)); alg=QRpos())
+    Y, bL = leftorth(B, ((2, 3, 4), (1, 5)); alg=QRpos())
     Y = permute(Y, (1, 2, 3, 4))
-    bL0 = permute(bL0, (3, 2, 1))
+    bL = permute(bL, (3, 2, 1))
     benv = bondenv_fu(row, col, X, Y, env)
     # positive/negative-definite approximant: env = ± Z Z†
     Z = positive_approx(benv)
     # fix gauge
     if alg.fixgauge
-        Z, X, Y, aR0, bL0 = fu_fixgauge(Z, X, Y, aR0, bL0)
+        Z, X, Y, aR, bL = fu_fixgauge(Z, X, Y, aR, bL)
     end
     benv = Z' * Z
     @assert [isdual(space(benv, ax)) for ax in 1:4] == [0, 0, 1, 1]
     #= apply gate
 
-            -2          -3
-            ↑           ↑
-            |----gate---|
-            ↑           ↑
+        -1← aR -← 3 -← bL ← -4
+            ↓           ↓
             1           2
-            ↑           ↑
-        -1← aR -← 3 -← bL → -4
+            ↓           ↓
+            |----gate---|
+            ↓           ↓
+            -2         -3
     =#
-    aR2bL2 = ncon((gate, aR0, bL0), ([-2, -3, 1, 2], [-1, 1, 3], [3, 2, -4]))
+    @tensor aR2bL2[-1 -2; -3 -4] := gate[-2 -3; 1 2] * aR[-1 1 3] * bL[3 2 -4]
     # initialize un-truncated tensors using SVD
-    aR, s_cut, bL, ϵ = tsvd(
-        aR2bL2, ((1, 2), (3, 4)); trunc=truncerr(1e-15), alg=TensorKit.SVD()
-    )
+    aR, s_cut, bL, ϵ = tsvd(aR2bL2; trunc=truncerr(1e-15), alg=TensorKit.SVD())
     aR, bL = absorb_s(aR, s_cut, bL)
-    aR, bL = permute(aR, (1, 2, 3)), permute(bL, (1, 2, 3))
     # optimize aR, bL
-    aR, s, bL, (cost, fid) = bond_optimize(aR, bL, benv, alg.opt_alg)
+    aR, s, bL, (cost, fid) = bond_truncate(aR, bL, benv, alg.opt_alg)
     aR, bL = absorb_s(aR, s, bL)
     aR /= norm(aR, Inf)
     bL /= norm(bL, Inf)
     #= update and normalize peps, ms
 
-            -2        -1               -1     -2
-            |        ↗                ↗       |
-        -5- X ← 1 ← aR ← -3     -5 ← bL → 1 → Y - -3
+            -2                                -2
             |                                 |
-            -4                                -4
+        -5- X ← 1 ← aR ← -3     -5 ← bL → 1 → Y - -3
+            |        ↘                ↘       |
+            -4        -1               -1     -4
     =#
     @tensor A[-1; -2 -3 -4 -5] := X[-2 1 -4 -5] * aR[1 -1 -3]
     @tensor B[-1; -2 -3 -4 -5] := bL[-5 -1 1] * Y[-2 -3 -4 1]
@@ -135,11 +111,11 @@ function _update_column!(
     wts_col = Vector{PEPSWeight}(undef, Nr)
     #= Axis order of X, aR, Y, bL
 
-            1             2            2         1
-            |            ↗           ↗           |
-        4 - X ← 2   1 ← aR ← 3  1 ← bL → 3   4 → Y - 2
+            1                                    1
             |                                    |
-            3                                    3
+        4 - X ← 2   1 ← aR ← 3  1 ← bL → 3   4 → Y - 2
+            |            ↘           ↘           |
+            3             2           2          3
     =#
     for row in 1:Nr
         term = get_gateterm(gate, (CartesianIndex(row, col), CartesianIndex(row, col + 1)))
@@ -148,8 +124,9 @@ function _update_column!(
         localfid += fid
     end
     # update CTMRGEnv
-    env2, info = ctmrg_leftmove(col, peps, env, alg.colmove_alg)
-    env2, info = ctmrg_rightmove(_next(col, Nc), peps, env2, alg.colmove_alg)
+    network = InfiniteSquareNetwork(peps)
+    env2, info = ctmrg_leftmove(col, network, env, alg.colmove_alg)
+    env2, info = ctmrg_rightmove(_next(col, Nc), network, env2, alg.colmove_alg)
     for c in [col, _next(col, Nc)]
         env.corners[:, :, c] = env2.corners[:, :, c]
         env.edges[:, :, c] = env2.edges[:, :, c]

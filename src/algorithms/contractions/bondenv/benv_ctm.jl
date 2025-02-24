@@ -107,9 +107,9 @@ function fu_fixgauge(
                         ↑
         -2 → Linv → 1 → Z ← 2 ← Rinv ← -3
     =#
-    aR = ncon([L, aR], [[-1, 1], [1, -2, -3]])
-    bL = ncon([bL, R], [[-1, -2, 1], [-3, 1]])
-    Z = permute(ncon([Z, Linv, Rinv], [[-1, 1, 2], [1, -2], [2, -3]]), (1,), (2, 3))
+    @tensor aR[:] := L[-1 1] * aR[1 -2 -3]
+    @tensor bL[:] := bL[-1 -2 1] * R[-3 1]
+    @tensor Z[-1; -2 -3] := Z[-1 1 2] * Linv[1 -2] * Rinv[2 -3]
     #= fix gauge of X, Y
 
             -1                                      -1
@@ -118,7 +118,7 @@ function fu_fixgauge(
              |                                      |
             -3                                      -3
     =#
-    X = ncon([X, Linv], [[-1, 1, -3, -4], [1, -2]])
-    Y = ncon([Y, Rinv], [[-1, -2, -3, 1], [1, -4]])
+    @tensor X[:] := X[-1 1 -3 -4] * Linv[1 -2]
+    @tensor Y[:] := Y[-1 -2 -3 1] * Rinv[1 -4]
     return Z, X, Y, aR, bL
 end
