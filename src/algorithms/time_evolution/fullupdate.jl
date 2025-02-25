@@ -30,67 +30,24 @@ function _fu_bondx!(
     Nr, Nc = size(peps)
     cp1 = _next(col, Nc)
     A, B = peps[row, col], peps[row, cp1]
-    # TODO: relax dual requirement on the bonds
-    @assert !isdual(domain(A)[2])
-    #= QR and LQ decomposition
-
-        2   1               1
-        | ↗                 |
-    5 - A ← 3   ====>   4 - X ← 2   1 ← aR ← 3
-        |                   |            ↘
-        4                   3             2
-    =#
-    X, aR = leftorth(A, ((2, 4, 5), (1, 3)); alg=QRpos())
-    X = permute(X, (1, 4, 2, 3))
-    aR = permute(aR, (1, 2, 3))
-    #=
-        2   1                           2
-        | ↗                             |
-    5 ← B - 3   ====>  1 ← bL → 3   1 → Y - 3
-        |                   ↘           |
-        4                     2         4
-    =#
-    Y, bL = leftorth(B, ((2, 3, 4), (1, 5)); alg=QRpos())
-    Y = permute(Y, (1, 2, 3, 4))
-    bL = permute(bL, (3, 2, 1))
+    X, a, b, Y = _qr_bond(A, B)
+    # positive/negative-definite approximant: benv = ± Z Z†
     benv = bondenv_fu(row, col, X, Y, env)
-    # positive/negative-definite approximant: env = ± Z Z†
     Z = positive_approx(benv)
     # fix gauge
     if alg.fixgauge
-        Z, X, Y, aR, bL = fu_fixgauge(Z, X, Y, aR, bL)
+        Z, X, Y, a, b = fu_fixgauge(Z, X, Y, a, b)
     end
     benv = Z' * Z
-    @assert [isdual(space(benv, ax)) for ax in 1:4] == [0, 0, 1, 1]
-    #= apply gate
-
-        -1← aR -← 3 -← bL ← -4
-            ↓           ↓
-            1           2
-            ↓           ↓
-            |----gate---|
-            ↓           ↓
-            -2         -3
-    =#
-    @tensor aR2bL2[-1 -2; -3 -4] := gate[-2 -3; 1 2] * aR[-1 1 3] * bL[3 2 -4]
-    # initialize un-truncated tensors using SVD
-    aR, s_cut, bL, ϵ = tsvd(aR2bL2; trunc=truncerr(1e-15), alg=TensorKit.SVD())
-    aR, bL = absorb_s(aR, s_cut, bL)
-    # optimize aR, bL
-    aR, s, bL, (cost, fid) = bond_truncate(aR, bL, benv, alg.opt_alg)
-    aR, bL = absorb_s(aR, s, bL)
-    aR /= norm(aR, Inf)
-    bL /= norm(bL, Inf)
-    #= update and normalize peps, ms
-
-            -2                                -2
-            |                                 |
-        -5- X ← 1 ← aR ← -3     -5 ← bL → 1 → Y - -3
-            |        ↘                ↘       |
-            -4        -1               -1     -4
-    =#
-    @tensor A[-1; -2 -3 -4 -5] := X[-2 1 -4 -5] * aR[1 -1 -3]
-    @tensor B[-1; -2 -3 -4 -5] := bL[-5 -1 1] * Y[-2 -3 -4 1]
+    # apply gate
+    a, s, b, = _apply_gate(a, b, gate, truncerr(1e-15))
+    a, b = absorb_s(a, s, b)
+    # optimize a, b
+    a, s, b, (cost, fid) = bond_truncate(a, b, benv, alg.opt_alg)
+    a, b = absorb_s(a, s, b)
+    a /= norm(a, Inf)
+    b /= norm(b, Inf)
+    A, B = _qr_bond_undo(X, a, b, Y)
     peps.A[row, col] = A / norm(A, Inf)
     peps.A[row, cp1] = B / norm(B, Inf)
     return s, cost, fid
@@ -109,14 +66,6 @@ function _update_column!(
     localfid = 0.0
     costs = zeros(Nr)
     wts_col = Vector{PEPSWeight}(undef, Nr)
-    #= Axis order of X, aR, Y, bL
-
-            1                                    1
-            |                                    |
-        4 - X ← 2   1 ← aR ← 3  1 ← bL → 3   4 → Y - 2
-            |            ↘           ↘           |
-            3             2           2          3
-    =#
     for row in 1:Nr
         term = get_gateterm(gate, (CartesianIndex(row, col), CartesianIndex(row, col + 1)))
         wts_col[row], cost, fid = _fu_bondx!(row, col, term, peps, env, alg)

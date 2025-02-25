@@ -10,9 +10,7 @@ for dt in dts
         tol=1e-8,
         bondenv_alg=NTUEnvNN(),
         opt_alg=FullEnvTruncation(; trscheme=trscheme_peps),
-        ctm_alg=SequentialCTMRG(;
-            tol=1e-7, verbosity=2, maxiter=30, trscheme=trscheme_env
-        ),
+        ctm_alg=SequentialCTMRG(; tol=1e-7, verbosity=2, maxiter=30, trscheme=trscheme_env),
     )
     result = ntupdate(peps, env, ham, alg, ctm_alg; bipartite=true)
     global peps = result[1]

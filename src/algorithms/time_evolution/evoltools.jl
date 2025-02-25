@@ -66,3 +66,73 @@ function _absorb_weight(
     end
     return t
 end
+
+"""
+Use QR decomposition on two tensors connected by a bond
+to get the reduced tensors
+```
+        2                   1
+        |                   |
+    5 - A ← 3   ====>   4 - X - 2   1 - a ← 3
+        | ↘                 |            ↘
+        4   1               3             2
+
+        2                               1
+        |                               |
+    5 ← B - 3   ====>   1 ← b - 3   4 - Y - 2
+        | ↘                  ↘          |
+        4   1                 2         3
+```
+"""
+function _qr_bond(A::PEPSTensor, B::PEPSTensor)
+    # TODO: relax dual requirement on the bonds
+    @assert isdual(space(A, 3))
+    X, a = leftorth(A, ((2, 4, 5), (1, 3)); alg=QRpos())
+    X = permute(X, (1, 4, 2, 3))
+    Y, b = leftorth(B, ((2, 3, 4), (1, 5)); alg=QRpos())
+    b, Y = permute(b, (3, 2, 1)), permute(Y, (1, 2, 3, 4))
+    return X, a, b, Y
+end
+
+"""
+Reconstruct the tensors connected by a bond from their QR results
+obtained from `_qr_bond`
+```
+        -2                             -2
+        |                               |
+    -5- X - 1 - a - -3     -5 - b - 1 - Y - -3
+        |        ↘               ↘      |
+        -4        -1              -1   -4
+```
+"""
+function _qr_bond_undo(X::PEPSOrth, a::AbstractTensorMap, b::AbstractTensorMap, Y::PEPSOrth)
+    @tensor A[-1; -2 -3 -4 -5] := X[-2 1 -4 -5] * a[1 -1 -3]
+    @tensor B[-1; -2 -3 -4 -5] := b[-5 -1 1] * Y[-2 -3 -4 1]
+    return A, B
+end
+
+"""
+Apply 2-site gate on the reduced matrices
+```
+    -1← a -← 3 -← b ← -4
+        ↓           ↓
+        1           2
+        ↓           ↓
+        |----gate---|
+        ↓           ↓
+        -2         -3
+```
+"""
+function _apply_gate(
+    a::AbstractTensorMap,
+    b::AbstractTensorMap,
+    gate::AbstractTensorMap{T,S,2,2},
+    trscheme::TruncationScheme,
+) where {T<:Number,S<:ElementarySpace}
+    @tensor a2b2[-1 -2; -3 -4] := gate[-2 -3; 1 2] * a[-1 1 3] * b[3 2 -4]
+    return tsvd!(
+        a2b2;
+        trunc=((trscheme isa FixedSpaceTruncation) ? truncspace(space(a, 3)) : trscheme),
+        alg=TensorKit.SVD(),
+    )
+end

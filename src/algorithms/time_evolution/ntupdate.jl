@@ -30,58 +30,17 @@ function _ntu_bondx!(
     Nr, Nc = size(peps)
     @assert 1 <= row <= Nr && 1 <= col <= Nc
     cp1 = _next(col, Nc)
-    # TODO: relax dual requirement on the bonds
     A, B = peps.vertices[row, col], peps.vertices[row, cp1]
-    @assert !isdual(domain(A)[2])
     A = _absorb_weight(A, row, col, "", peps.weights)
     B = _absorb_weight(B, row, cp1, "", peps.weights)
-    #= QR and LQ decomposition
-
-        2   1               1
-        | ↗                 |
-    5 - A ← 3   ====>   4 - X ← 2   1 ← aR ← 3
-        |                   |            ↘
-        4                   3             2
-    =#
-    X, aR = leftorth(A, ((2, 4, 5), (1, 3)); alg=QRpos())
-    X, aR = permute(X, (1, 4, 2, 3)), permute(aR, (1, 2, 3))
-    #=
-        2   1                           2
-        | ↗                             |
-    5 ← B - 3   ====>  1 ← bL → 3   1 → Y - 3
-        |                   ↘           |
-        4                     2         4
-    =#
-    Y, bL = leftorth(B, ((2, 3, 4), (1, 5)); alg=QRpos())
-    bL, Y = permute(bL, (3, 2, 1)), permute(Y, (1, 2, 3, 4))
+    X, a, b, Y = _qr_bond(A, B)
     benv = bondenv_ntu(row, col, X, Y, peps, alg.bondenv_alg)
-    @assert [isdual(space(benv, ax)) for ax in 1:4] == [0, 0, 1, 1]
-    #= apply gate
-
-        -1← aR -← 3 -← bL ← -4
-            ↓           ↓
-            1           2
-            ↓           ↓
-            |----gate---|
-            ↓           ↓
-            -2         -3
-    =#
-    @tensor aR2bL2[-1 -2; -3 -4] := gate[-2 -3; 1 2] * aR[-1 1 3] * bL[3 2 -4]
-    # initialize aR, bL using un-truncated SVD
-    aR, s, bL, ϵ = tsvd(aR2bL2; trunc=truncerr(1e-15), alg=TensorKit.SVD())
-    aR, bL = absorb_s(aR, s, bL)
-    # optimize aR, bL
-    aR, s, bL, (cost, fid) = bond_truncate(aR, bL, benv, alg.opt_alg)
-    #= update and normalize peps, ms
-
-            -2                                -2
-            |                                 |
-        -5- X ← 1 ← aR ← -3     -5 ← bL → 1 → Y - -3
-            |        ↘                ↘       |
-            -4        -1               -1     -4
-    =#
-    @tensor A[-1; -2 -3 -4 -5] := X[-2 1 -4 -5] * aR[1 -1 -3]
-    @tensor B[-1; -2 -3 -4 -5] := bL[-5 -1 1] * Y[-2 -3 -4 1]
+    # apply gate
+    a, s, b, = _apply_gate(a, b, gate, truncerr(1e-15))
+    a, b = absorb_s(a, s, b)
+    # optimize a, b
+    a, s, b, (cost, fid) = bond_truncate(a, b, benv, alg.opt_alg)
+    A, B = _qr_bond_undo(X, a, b, Y)
     # remove bond weights
     for ax in (2, 4, 5)
         A = absorb_weight(A, row, col, ax, peps.weights; sqrtwt=true, invwt=true)

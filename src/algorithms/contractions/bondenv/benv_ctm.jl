@@ -72,8 +72,8 @@ function fu_fixgauge(
     Z::AbstractTensorMap{T,S,1,2},
     X::PEPSOrth{T,S},
     Y::PEPSOrth{T,S},
-    aR::AbstractTensor{T,S,3},
-    bL::AbstractTensor{T,S,3},
+    a::AbstractTensorMap,
+    b::AbstractTensorMap,
 ) where {T<:Number,S<:ElementarySpace}
     #= 
             1               1
@@ -89,26 +89,26 @@ function fu_fixgauge(
     @assert !isdual(codomain(R)[1]) && !isdual(domain(R)[1])
     @assert !isdual(codomain(L)[1]) && !isdual(domain(L)[1])
     Rinv, Linv = inv(R), inv(L)
-    #= fix gauge of aR, bL, Z
+    #= fix gauge of a, b, Z
 
                     ↑
         |→-(Linv -→ Z ←- Rinv)←-|
         |                       |
         ↑                       ↑
         |        ↑     ↑        |
-        |← (L ← aR) ← (bL → R) →|
+        |←- (L ← a) ← (b → R) -→|
         |-----------------------|
 
-                     -2              -2
-                      ↑               ↑        
-        -1 ← L ← 1 ← aR2 ← -3   -1 ← bL2 → 1 → R → -3
+                     -2            -2
+                      ↑             ↑        
+        -1 ← L ← 1 ← a2 ← -3   -1 ← b2 → 1 → R → -3
 
                         -1
                         ↑
         -2 → Linv → 1 → Z ← 2 ← Rinv ← -3
     =#
-    @tensor aR[:] := L[-1 1] * aR[1 -2 -3]
-    @tensor bL[:] := bL[-1 -2 1] * R[-3 1]
+    @tensor a[:] := L[-1 1] * a[1 -2 -3]
+    @tensor b[:] := b[-1 -2 1] * R[-3 1]
     @tensor Z[-1; -2 -3] := Z[-1 1 2] * Linv[1 -2] * Rinv[2 -3]
     #= fix gauge of X, Y
 
@@ -120,5 +120,5 @@ function fu_fixgauge(
     =#
     @tensor X[:] := X[-1 1 -3 -4] * Linv[1 -2]
     @tensor Y[:] := Y[-1 -2 -3 1] * Rinv[1 -4]
-    return Z, X, Y, aR, bL
+    return Z, X, Y, a, b
 end

@@ -173,8 +173,7 @@ for (dir, free_ax) in free_ax_cor
         $(fname)(ket::PEPSTensor) = benv_tensor($free_ax, ket, ket)
         $(fname)(ket::PEPSOrth) = benv_tensor($(free_ax .- 1), ket, ket)
         $(fname)(ket::PEPSTensor, h1, h2) = benv_tensor($free_ax, ket, ket, [h1, h2])
-        $(fname)(ket::PEPSOrth, h1, h2) =
-            benv_tensor($(free_ax .- 1), ket, ket, [h1, h2])
+        $(fname)(ket::PEPSOrth, h1, h2) = benv_tensor($(free_ax .- 1), ket, ket, [h1, h2])
     end
 end
 
