@@ -36,23 +36,23 @@ function _su_bondx!(
     @assert 1 <= row <= Nr && 1 <= col <= Nc
     cp1 = _next(col, Nc)
     # absorb environment weights
-    T1, T2 = peps.vertices[row, col], peps.vertices[row, cp1]
-    T1 = _absorb_weight(T1, row, col, "tbl", peps.weights)
-    T2 = _absorb_weight(T2, row, cp1, "trb", peps.weights)
+    A, B = peps.vertices[row, col], peps.vertices[row, cp1]
+    A = _absorb_weight(A, row, col, "tbl", peps.weights)
+    B = _absorb_weight(B, row, cp1, "trb", peps.weights)
     # apply gate
-    X, a, b, Y = _qr_bond(T1, T2)
+    X, a, b, Y = _qr_bond(A, B)
     a, s, b, ϵ = _apply_gate(a, b, gate, alg.trscheme)
-    T1, T2 = _qr_bond_undo(X, a, b, Y)
+    A, B = _qr_bond_undo(X, a, b, Y)
     # remove environment weights
     for ax in (2, 4, 5)
-        T1 = absorb_weight(T1, row, col, ax, peps.weights; invwt=true)
+        A = absorb_weight(A, row, col, ax, peps.weights; invwt=true)
     end
     for ax in (2, 3, 4)
-        T2 = absorb_weight(T2, row, cp1, ax, peps.weights; invwt=true)
+        B = absorb_weight(B, row, cp1, ax, peps.weights; invwt=true)
     end
     # update tensor dict and weight on current bond 
     # (max element of weight is normalized to 1)
-    peps.vertices[row, col], peps.vertices[row, cp1] = T1, T2
+    peps.vertices[row, col], peps.vertices[row, cp1] = A, B
     peps.weights[1, row, col] = s / norm(s, Inf)
     return ϵ
 end

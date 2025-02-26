@@ -36,21 +36,22 @@ function _fu_bondx!(
     Z = positive_approx(benv)
     # fix gauge
     if alg.fixgauge
-        Z, X, Y, a, b = fu_fixgauge(Z, X, Y, a, b)
+        Z, a, b, (Linv, Rinv) = fixgauge_benv(Z, a, b)
+        X, Y = _fixgauge_benvXY(X, Y, Linv, Rinv)
     end
     benv = Z' * Z
     # apply gate
     a, s, b, = _apply_gate(a, b, gate, truncerr(1e-15))
     a, b = absorb_s(a, s, b)
     # optimize a, b
-    a, s, b, (cost, fid) = bond_truncate(a, b, benv, alg.opt_alg)
+    a, s, b, info = bond_truncate(a, b, benv, alg.opt_alg)
     a, b = absorb_s(a, s, b)
     a /= norm(a, Inf)
     b /= norm(b, Inf)
     A, B = _qr_bond_undo(X, a, b, Y)
     peps.A[row, col] = A / norm(A, Inf)
     peps.A[row, cp1] = B / norm(B, Inf)
-    return s, cost, fid
+    return s, info
 end
 
 """
@@ -63,14 +64,12 @@ function _update_column!(
 )
     Nr, Nc = size(peps)
     @assert 1 <= col <= Nc
-    localfid = 0.0
-    costs = zeros(Nr)
+    fid = 1.0
     wts_col = Vector{PEPSWeight}(undef, Nr)
     for row in 1:Nr
         term = get_gateterm(gate, (CartesianIndex(row, col), CartesianIndex(row, col + 1)))
-        wts_col[row], cost, fid = _fu_bondx!(row, col, term, peps, env, alg)
-        costs[row] = cost
-        localfid += fid
+        wts_col[row], info = _fu_bondx!(row, col, term, peps, env, alg)
+        fid = min(fid, info.fid)
     end
     # update CTMRGEnv
     network = InfiniteSquareNetwork(peps)
@@ -80,7 +79,7 @@ function _update_column!(
         env.corners[:, :, c] = env2.corners[:, :, c]
         env.edges[:, :, c] = env2.edges[:, :, c]
     end
-    return wts_col, localfid, costs
+    return wts_col, fid
 end
 
 """
@@ -90,27 +89,24 @@ Reference: Physical Review B 92, 035142 (2015)
 """
 function fu_iter(gate::LocalOperator, peps::InfinitePEPS, env::CTMRGEnv, alg::FullUpdate)
     Nr, Nc = size(peps)
-    fid, maxcost = 0.0, 0.0
+    fid = 1.0
     peps2, env2 = deepcopy(peps), deepcopy(env)
     wts = Array{PEPSWeight}(undef, 2, Nr, Nc)
     for col in 1:Nc
-        wts[1, :, col], tmpfid, costs = _update_column!(col, gate, peps2, env2, alg)
-        fid += tmpfid
-        maxcost = max(maxcost, maximum(costs))
+        wts[1, :, col], fid_col = _update_column!(col, gate, peps2, env2, alg)
+        fid = min(fid, fid_col)
     end
     peps2, env2 = rotr90(peps2), rotr90(env2)
     gate_rotated = rotr90(gate)
     for row in 1:Nr
         # the row-th column after rotr90 was (Nr+1-row)-th row
-        wts[2, Nr + 1 - row, :], tmpfid, costs = _update_column!(
+        wts[2, Nr + 1 - row, :], fid_row = _update_column!(
             row, gate_rotated, peps2, env2, alg
         )
-        fid += tmpfid
-        maxcost = max(maxcost, maximum(costs))
+        fid = min(fid, fid_row)
     end
     peps2, env2 = rotl90(peps2), rotl90(env2)
-    fid /= (2 * Nr * Nc)
-    return peps2, env2, SUWeight(wts), (fid, maxcost)
+    return peps2, env2, SUWeight(wts), fid
 end
 
 """
@@ -141,7 +137,7 @@ function fullupdate(
     energy0, energy, ediff, wtdiff = Inf, 0.0, 0.0, NaN
     for count in 1:(fu_alg.maxiter)
         time0 = time()
-        peps, env, wts, (fid, cost) = fu_iter(gate, peps, env, fu_alg)
+        peps, env, wts, fid = fu_iter(gate, peps, env, fu_alg)
         wtdiff = (count == 1) ? NaN : compare_weights(wts, wts0)
         wts0 = deepcopy(wts)
         time1 = time()

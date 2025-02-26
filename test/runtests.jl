@@ -42,14 +42,17 @@ end
         end
     end
     if GROUP == "ALL" || GROUP == "BONDENV"
-        @time @safetestset "Positive-definite bond environment" begin
-            include("bondenv/positive.jl")
-        end
         @time @safetestset "Iterative optimization after truncation" begin
             include("bondenv/bond_truncate.jl")
         end
-        @time @safetestset "Positiveness of bond environments" begin
-            include("bondenv/benv_positive.jl")
+        @time @safetestset "Gauge fixing" begin
+            include("bondenv/benv_gaugefix.jl")
+        end
+        @time @safetestset "Positiveness of NTU bond environments" begin
+            include("bondenv/benv_ntu.jl")
+        end
+        @time @safetestset "Full bond environment from CTMRG" begin
+            include("bondenv/benv_fu.jl")
         end
     end
     if GROUP == "ALL" || GROUP == "UTILITY"

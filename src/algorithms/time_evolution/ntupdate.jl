@@ -39,7 +39,7 @@ function _ntu_bondx!(
     a, s, b, = _apply_gate(a, b, gate, truncerr(1e-15))
     a, b = absorb_s(a, s, b)
     # optimize a, b
-    a, s, b, (cost, fid) = bond_truncate(a, b, benv, alg.opt_alg)
+    a, s, b, info = bond_truncate(a, b, benv, alg.opt_alg)
     A, B = _qr_bond_undo(X, a, b, Y)
     # remove bond weights
     for ax in (2, 4, 5)
@@ -51,7 +51,7 @@ function _ntu_bondx!(
     peps.vertices[row, col] = A / norm(A, Inf)
     peps.vertices[row, cp1] = B / norm(B, Inf)
     peps.weights[1, row, col] = s / norm(s, Inf)
-    return cost, fid
+    return info
 end
 
 """
@@ -90,7 +90,7 @@ function ntu_iter(
                     direction == 1 ? gate : gate_mirrored,
                     (CartesianIndex(r, 1), CartesianIndex(r, 2)),
                 )
-                ϵ = _ntu_bondx!(r, 1, term, peps2, alg)
+                info = _ntu_bondx!(r, 1, term, peps2, alg)
                 peps2.vertices[rp1, 2] = deepcopy(peps2.vertices[r, 1])
                 peps2.vertices[rp1, 1] = deepcopy(peps2.vertices[r, 2])
                 peps2.weights[1, rp1, 2] = deepcopy(peps2.weights[1, r, 1])
@@ -102,7 +102,7 @@ function ntu_iter(
                     direction == 1 ? gate : gate_mirrored,
                     (CartesianIndex(r, c), CartesianIndex(r, c + 1)),
                 )
-                ϵ = _ntu_bondx!(r, c, term, peps2, alg)
+                info = _ntu_bondx!(r, c, term, peps2, alg)
             end
         end
         if direction == 2

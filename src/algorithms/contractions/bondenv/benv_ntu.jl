@@ -1,12 +1,12 @@
 #= 
-The Neighborhood Tensor Update (NTU) code is adapted from
+The construction of bond environment for Neighborhood Tensor Update (NTU) is adapted from
 YASTN (https://github.com/yastn/yastn).
 Copyright 2024 The YASTN Authors. All Rights Reserved.
 Licensed under the Apache License, Version 2.0
 =#
 
 """
-Neighborhood tensor update (NTU) algorithms to construct bond environment.
+Algorithms to construct bond environment for Neighborhood Tensor Update (NTU).
 """
 abstract type NTUEnvAlgorithm end
 
@@ -62,7 +62,6 @@ function bondenv_ntu(
     benv_tr /= norm(benv_tr, Inf)
     @tensor benv[Dl1 Dr1; Dl0 Dr0] :=
         benv_bl[Dbr1 Dbr0 Dl1 Dl0 Dtl1 Dtl0] * benv_tr[Dtl1 Dtl0 Dr1 Dr0 Dbr1 Dbr0]
-    @assert [isdual(space(benv, ax)) for ax in 1:4] == [0, 0, 1, 1]
     return benv / norm(benv, Inf)
 end
 
@@ -128,7 +127,6 @@ function bondenv_ntu(
     vecr /= norm(vecr, Inf)
     # combine left and right part
     @tensor benv[-1 -2; -3 -4] := vecl[1 2 -1 -3 3 4] * vecr[1 2 -2 -4 3 4]
-    @assert [isdual(space(benv, ax)) for ax in 1:4] == [0, 0, 1, 1]
     return benv / norm(benv, Inf)
 end
 
@@ -230,6 +228,5 @@ function bondenv_ntu(
     vecr /= norm(vecr, Inf)
     # combine left and right part
     @tensor benv[-1 -2; -3 -4] := vecl[1 2 -1 -3 3 4] * vecr[1 2 -2 -4 3 4]
-    @assert [isdual(space(benv, ax)) for ax in 1:4] == [0, 0, 1, 1]
     return benv / norm(benv, Inf)
 end

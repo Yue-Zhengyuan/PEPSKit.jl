@@ -86,11 +86,14 @@ to get the reduced tensors
 """
 function _qr_bond(A::PEPSTensor, B::PEPSTensor)
     # TODO: relax dual requirement on the bonds
-    @assert isdual(space(A, 3))
-    X, a = leftorth(A, ((2, 4, 5), (1, 3)); alg=QRpos())
+    @assert isdual(space(A, 3)) # currently only allow A ← B
+    X, a = leftorth(A, ((2, 4, 5), (1, 3)))
+    b, Y = rightorth(B, ((5, 1), (2, 3, 4)))
+    # add twist if X → a / b → Y
+    isdual(space(a, 1)) && twist!(a, 1)
+    isdual(space(Y, 1)) && twist!(b, 3)
     X = permute(X, (1, 4, 2, 3))
-    Y, b = leftorth(B, ((2, 3, 4), (1, 5)); alg=QRpos())
-    b, Y = permute(b, (3, 2, 1)), permute(Y, (1, 2, 3, 4))
+    Y = permute(Y, (2, 3, 4, 1))
     return X, a, b, Y
 end
 
@@ -112,7 +115,7 @@ function _qr_bond_undo(X::PEPSOrth, a::AbstractTensorMap, b::AbstractTensorMap, 
 end
 
 """
-Apply 2-site gate on the reduced matrices
+Apply 2-site `gate` on the reduced matrices `a`, `b`
 ```
     -1← a -← 3 -← b ← -4
         ↓           ↓

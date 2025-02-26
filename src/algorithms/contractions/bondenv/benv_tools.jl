@@ -3,8 +3,8 @@ const Hair{T,S} = AbstractTensor{T,S,2} where {T<:Number,S<:ElementarySpace}
 const PEPSOrth{T,S} = AbstractTensor{T,S,4} where {T<:Number,S<:ElementarySpace}
 
 """
-Extract tensors in an infinite PEPS at positions 
-specified in `neighbors` relative to `(row, col)`
+Extract tensors in an infinite PEPS 
+at positions `neighbors` relative to `(row, col)`
 """
 function collect_neighbors(
     peps::InfinitePEPS, row::Int, col::Int, neighbors::Vector{Tuple{Int,Int}}
@@ -16,8 +16,8 @@ function collect_neighbors(
 end
 
 """
-Extract tensors in an infinite PEPS with weight at positions 
-specified in `neighbors` relative to `(row, col)`
+Extract tensors in an infinite PEPS with weight 
+at positions `neighbors` relative to `(row, col)`
 """
 function collect_neighbors(
     peps::InfiniteWeightPEPS, row::Int, col::Int, neighbors::Vector{Tuple{Int,Int,String}}
@@ -37,42 +37,45 @@ end
 
 Contract the physical axes (for PEPSTensor) and the virtual axes of `ket` with `bra` to obtain the tensor on the boundary of the bond environment. Virtual axes specified by `free_axs` (in ascending order) are not contracted. 
 
-# Examples (when `ket`, `bra` are PEPSTensor with a physical axis)
+# Examples
 
-- Left "hair" tensor (`free_ax = 3`)
+- Left "hair" tensor when `ket`, `bra` are `PEPSTensor`
+(`free_ax = 3`) 
 ```
              ╱|
-    |-----bra----- 1
+    ┌-----bra----- 1
     |    ╱ |  |
     |   |  |  |
     |   |  | ╱
-    |---|-ket----- 2
+    └---|-ket----- 2
         |╱
 ```
 
-- Upper-left corner tensor (`free_ax = [3, 4]`, `axts = [t, nothing]`)
+- Upper-left corner tensor when `ket`, `bra` are `PEPSOrth`
+(`free_ax = [3, 4]`, `axts = [t, nothing]`)
 (fermion signs should not be cancelled when contracting `t`)
 ```
              ╱|
-    |-----bra----- 1
-    |    ╱ |  t
-    |   3  |  |
-    |      |  |
-    |      | ╱
-    |-----ket----- 2
+    ┌-----bra----- 1
+    |    ╱    t
+    |   3     |
+    |         |
+    |        ╱
+    └-----ket----- 2
          ╱
         4
 ```
 
-- Left edge tensor (`free_ax = [2, 3, 4]`)
+- Left edge tensor when `ket`, `bra` are `PEPSTensor`
+(`free_ax = [2, 3, 4]`)
 ```
                1
              ╱
-    |-----bra----- 3
+    ┌-----bra----- 3
     |    ╱ |
     |   5  |   2
     |      | ╱
-    |-----ket----- 4
+    └-----ket----- 4
           ╱
         6
 ```
@@ -240,40 +243,4 @@ function enlarge_corner_br(
         er[-3 -4 D31 D30 D11 D10] *
         conj(bra[-1 D11 D21 -5]) *
         ket[-2 D10 D20 -6]
-end
-
-"""
-Replace `env` by its positive approximant `Z† Z`
-(returns `Z`)
-```
-                        |-→ 1   2 ←-|
-                        |           |
-    |----env----|       |←--- Z† --→|
-    |→ 1     2 ←|   =         ↑
-    |← 3     4 →|       |---→ Z ←---|
-    |-----------|       |           |
-                        |←- 3   4 -→|
-```
-"""
-function positive_approx(benv::BondEnv)
-    @assert [isdual(space(benv, ax)) for ax in 1:4] == [0, 0, 1, 1]
-    # hermitize env, and perform eigen-decomposition
-    # env = U D U'
-    D, U = eigh((benv + benv') / 2)
-    # determine if `env` is (mostly) positive or negative
-    # if negative, (-1) will be multiplied to `env` through `D`
-    sgn = sign(mean(vcat((diag(b) for (k, b) in blocks(D))...)))
-    if sgn == -1
-        D *= -1
-    end
-    # set negative eigenvalues to 0
-    for (k, b) in blocks(D)
-        for i in diagind(b)
-            if b[i] < 0
-                b[i] = 0.0
-            end
-        end
-    end
-    Z = sdiag_pow(D, 0.5) * U'
-    return Z
 end
