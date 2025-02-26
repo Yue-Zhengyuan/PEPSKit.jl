@@ -17,9 +17,9 @@ if symm == Trivial
     Vspace = ℂ^Dbond
     Espace = ℂ^χenv
 elseif symm == U1Irrep
-    Pspace = ℂ[U1Irrep](1//2 => 1, -1//2 => 1)
-    Vspace = ℂ[U1Irrep](0 => Dbond ÷ 2, 1//2 => Dbond ÷ 4, -1//2 => Dbond ÷ 4)
-    Espace = ℂ[U1Irrep](0 => χenv ÷ 2, 1//2 => χenv ÷ 4, -1//2 => χenv ÷ 4)
+    Pspace = Vect[U1Irrep](1//2 => 1, -1//2 => 1)
+    Vspace = Vect[U1Irrep](0 => Dbond ÷ 2, 1//2 => Dbond ÷ 4, -1//2 => Dbond ÷ 4)
+    Espace = Vect[U1Irrep](0 => χenv ÷ 2, 1//2 => χenv ÷ 4, -1//2 => χenv ÷ 4)
 else
     error("Not implemented")
 end
