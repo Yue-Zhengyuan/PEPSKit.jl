@@ -60,9 +60,7 @@ function bondenv_fu(row::Int, col::Int, X::PEPSOrth, Y::PEPSOrth, env::CTMRGEnv)
         t1Y[χ6 DNY0 DNY1 χ8]
     )
     # combine
-    @autoopt @tensor benv[DX1 DY1; DX0 DY0] := (
-        lhalf[DX1 DX0 χ5 χ6] * rhalf[DY1 DY0 χ5 χ6]
-    )
+    @autoopt @tensor benv[DX1 DY1; DX0 DY0] := (lhalf[DX1 DX0 χ5 χ6] * rhalf[DY1 DY0 χ5 χ6])
     benv /= norm(benv, Inf)
     return benv
 end

@@ -5,8 +5,14 @@ using LinearAlgebra
 using KrylovKit
 using Random
 
+function _benv_condition_number(benv::AbstractTensorMap)
+    @assert codomain(benv) == domain(benv)
+    u, s, vh, = tsvd(benv)
+    return PEPSKit._condition_number(s)
+end
+
 Nr, Nc = 2, 2
-Random.seed!(0)
+Random.seed!(20)
 Pspace = Vect[FermionParity](0 => 1, 1 => 1)
 V2 = Vect[FermionParity](0 => 1, 1 => 1)
 V3 = Vect[FermionParity](0 => 1, 1 => 2)
@@ -25,16 +31,23 @@ end
 # The NTU bond environments are constructed exactly
 # and should be positive definite
 for env_alg in (NTUEnvNN(), NTUEnvNNN(), NTUEnvNNNp())
+    @info "Testing $(typeof(env_alg))"
     for row in 1:Nr, col in 1:Nc
         cp1 = PEPSKit._next(col, Nc)
         A, B = peps.vertices[row, col], peps.vertices[row, cp1]
-        X = randn(ComplexF64, space(A, 2) ⊗ W1' ⊗ space(A, 4) ⊗ space(A, 5))
-        Y = randn(ComplexF64, space(B, 2) ⊗ space(B, 3) ⊗ space(B, 4) ⊗ W2')
-        env = PEPSKit.bondenv_ntu(row, col, X, Y, peps, env_alg)
-        # env should be Hermitian
-        @test env' ≈ env
-        # env should be positive definite
-        D, U = eigh(env)
+        X, a, b, Y = PEPSKit._qr_bond(A, B)
+        benv = PEPSKit.bondenv_ntu(row, col, X, Y, peps, env_alg)
+        # benv should be Hermitian
+        @test benv' ≈ benv
+        # benv should be positive definite
+        D, U = eigh(benv)
         @test all(all(x -> x >= 0, diag(b)) for (k, b) in blocks(D))
+        # make condition number smaller by gauge fixing
+        cond0 = _benv_condition_number(benv)
+        Z = PEPSKit.sdiag_pow(D, 0.5) * U'
+        Z, a, b = PEPSKit.fixgauge_benv(Z, a, b)
+        cond1 = _benv_condition_number(Z' * Z)
+        @test cond1 < cond0
+        @info "benv cond number: (gauge-fixed) $(cond1) < $(cond0) (initial)"
     end
 end
