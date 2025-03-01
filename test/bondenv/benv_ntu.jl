@@ -37,17 +37,36 @@ for env_alg in (NTUEnvNN(), NTUEnvNNN(), NTUEnvNNNp())
         A, B = peps.vertices[row, col], peps.vertices[row, cp1]
         X, a, b, Y = PEPSKit._qr_bond(A, B)
         benv = PEPSKit.bondenv_ntu(row, col, X, Y, peps, env_alg)
+        # @assert [isdual(space(benv, ax)) for ax in 1:numind(benv)] == [0, 0, 1, 1]
+        ab = PEPSKit._combine_ab(a, b)
+        nrm1 = PEPSKit.inner_prod(benv, ab, ab)
         # benv should be Hermitian
         @test benv' ≈ benv
         # benv should be positive definite
         D, U = eigh(benv)
         @test all(all(x -> x >= 0, diag(b)) for (k, b) in blocks(D))
+        @assert benv ≈ U * D * U'
+        cond = _benv_condition_number(benv)
         # make condition number smaller by gauge fixing
-        cond0 = _benv_condition_number(benv)
         Z = PEPSKit.sdiag_pow(D, 0.5) * U'
-        Z, a, b = PEPSKit.fixgauge_benv(Z, a, b)
-        cond1 = _benv_condition_number(Z' * Z)
-        @test cond1 < cond0
-        @info "benv cond number: (gauge-fixed) $(cond1) < $(cond0) (initial)"
+        @assert benv ≈ Z' * Z
+        Z2, a2, b2, (Linv, Rinv) = PEPSKit.fixgauge_benv(Z, a, b)
+        benv2 = Z2' * Z2
+        cond2 = _benv_condition_number(benv2)
+        @test cond2 < cond
+        @info "benv cond number: (gauge-fixed) $(cond2) < $(cond) (initial)"
+        a2b2 = PEPSKit._combine_ab(a2, b2)
+        nrm2 = PEPSKit.inner_prod(benv2, a2b2, a2b2)
+        @test nrm1 ≈ nrm2
+        # verify gauge transformation of X, Y
+        X2, Y2 = PEPSKit._fixgauge_benvXY(X, Y, Linv, Rinv)
+        benv3 = PEPSKit.bondenv_ntu(row, col, X2, Y2, peps, env_alg)
+        cond3 = _benv_condition_number(benv3)
+        @info norm(benv2 - benv3, Inf)
+        @info "benv3 cond number: $(cond3)"
+        # full contraction before and after gauge fixing
+        nrm3 = PEPSKit.inner_prod(benv3, a2b2, a2b2)
+        @info nrm2
+        @info nrm3
     end
 end

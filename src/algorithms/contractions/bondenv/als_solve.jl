@@ -148,6 +148,11 @@ function _combine_ab(
 ) where {T<:Number,S<:ElementarySpace}
     return @tensor ab[DX DY; da db] := a[DX D; da] * b[D DY; db]
 end
+function _combine_ab(
+    a::AbstractTensorMap{T,S,1,2}, b::AbstractTensorMap{T,S,2,1}
+) where {T<:Number,S<:ElementarySpace}
+    return @tensor ab[DX DY; da db] := a[DX; da D] * b[D db; DY]
+end
 
 """
 Calculate the cost function

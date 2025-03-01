@@ -13,6 +13,7 @@ end
 
 Nr, Nc = 2, 3
 # create random PEPS
+Random.seed!(0)
 Pspace = Vect[FermionParity](0 => 1, 1 => 1)
 Nspace = Vect[FermionParity](0 => 2, 1 => 2)
 peps = InfinitePEPS(randn, ComplexF64, Pspace, Nspace; unitcell=(Nr, Nc))
@@ -29,10 +30,15 @@ for row in 1:Nr, col in 1:Nc
     X, a, b, Y = PEPSKit._qr_bond(A, B)
     # verify that gauge fixing can reduce condition number
     benv = PEPSKit.bondenv_fu(row, col, X, Y, env)
+    # @assert [isdual(space(benv, ax)) for ax in 1:numind(benv)] == [0, 0, 1, 1]
+    ab = PEPSKit._combine_ab(a, b)
+    nrm1 = PEPSKit.inner_prod(benv, ab, ab)
+    # gauge fixing
     Z = PEPSKit.positive_approx(benv)
-    cond0 = _benv_condition_number(Z' * Z)
-    Z, a, b = PEPSKit.fixgauge_benv(Z, a, b)
-    cond1 = _benv_condition_number(Z' * Z)
-    @test cond1 < cond0
-    @info "benv cond number: (gauge-fixed) $(cond1) < $(cond0) (initial)"
+    cond = _benv_condition_number(Z' * Z)
+    Z2, a2, b2, (Linv, Rinv) = PEPSKit.fixgauge_benv(Z, a, b)
+    benv2 = Z2' * Z2
+    cond2 = _benv_condition_number(benv2)
+    @test cond2 < cond
+    @info "benv cond number: (gauge-fixed) $(cond2) < $(cond) (initial)"
 end
