@@ -54,7 +54,7 @@ function fixgauge_benv(
     @assert !isdual(space(b, 2))
     #= QR/LQ decomposition of Z 
 
-        3 - Z - 2   =   1 - L - 2   1 - QL - 3
+        3 - Z - 2   =   2 - L - 1   3 - QL - 1
             ↓                           ↓
             1                           2
 
@@ -62,14 +62,14 @@ function fixgauge_benv(
                             ↓
                             2
     =#
-    L, QL = rightorth(Z, ((3,), (1, 2)))
+    QL, L = leftorth(Z, ((2, 1), (3,)))
     QR, R = leftorth(Z, ((3, 1), (2,)))
     Linv, Rinv = inv(L), inv(R)
     #= fix gauge of Z, a, b
-        ┌------------------------------------┐
-        |                                    |
-        └---Z--Rinv)--(R--a)--(b--L)--(Linv--┘
-            |              ↓    ↓
+        ┌---------------------------------------┐
+        |                                       |
+        └---Z---Rinv)---(R--a)--(b--L)---(Linv--┘
+            |               ↓    ↓
             ↓
 
         -1 - R - 1 - a - -3   -1 - b - 1 - L - -3
@@ -83,8 +83,8 @@ function fixgauge_benv(
             -1
     =#
     @plansor a[-1; -2 -3] := R[-1; 1] * a[1; -2 -3]
-    @plansor b[-1 -2; -3] := b[-1 -2; 1] * L[1; -3]
-    @plansor Z[-1; -2 -3] := Linv[-3; 2] * Z[-1; 1 2] * Rinv[1; -2]
+    @plansor b[-1 -2; -3] := b[-1 -2; 1] * L[-3; 1]
+    @plansor Z[-1; -2 -3] := Z[-1; 1 2] * Rinv[1; -2] * Linv[2; -3]
     (isdual(space(R, 1)) == isdual(space(R, 2))) && twist!(a, 1)
     (isdual(space(L, 1)) == isdual(space(L, 2))) && twist!(b, 3)
     return Z, a, b, (Linv, Rinv)
@@ -114,6 +114,6 @@ function _fixgauge_benvXY(
     Rinv::AbstractTensorMap{T,S,1,1},
 ) where {T<:Number,S<:ElementarySpace}
     @plansor X[-1 -2 -3 -4] := X[-1 1 -3 -4] * Rinv[1; -2]
-    @plansor Y[-1 -2 -3 -4] := Linv[-4; 1] * Y[-1 -2 -3 1]
+    @plansor Y[-1 -2 -3 -4] := Y[-1 -2 -3 1] * Linv[1; -4]
     return X, Y
 end

@@ -73,13 +73,13 @@ to get the reduced tensors
 ```
         2                   1
         |                   |
-    5 - A ← 3   ====>   4 - X - 2   1 - a ← 3
+    5 - A ← 3   ====>   4 - X ← 2   1 ← a ← 3
         | ↘                 |            ↘
         4   1               3             2
 
         2                               1
         |                               |
-    5 ← B - 3   ====>   1 ← b - 3   4 - Y - 2
+    5 ← B - 3   ====>   1 ← b → 3   4 → Y - 2
         | ↘                  ↘          |
         4   1                 2         3
 ```
@@ -88,12 +88,12 @@ function _qr_bond(A::PEPSTensor, B::PEPSTensor)
     # TODO: relax dual requirement on the bonds
     @assert isdual(space(A, 3)) # currently only allow A ← B
     X, a = leftorth(A, ((2, 4, 5), (1, 3)))
-    b, Y = rightorth(B, ((5, 1), (2, 3, 4)))
-    # add twist if X → a / b → Y
-    isdual(space(a, 1)) && twist!(a, 1)
-    isdual(space(Y, 1)) && twist!(b, 3)
+    Y, b = leftorth(B, ((2, 3, 4), (1, 5)))
+    @assert !isdual(space(a, 1))
+    @assert !isdual(space(b, 1))
     X = permute(X, (1, 4, 2, 3))
-    Y = permute(Y, (2, 3, 4, 1))
+    Y = permute(Y, (1, 2, 3, 4))
+    b = permute(b, ((3, 2), (1,)))
     return X, a, b, Y
 end
 
