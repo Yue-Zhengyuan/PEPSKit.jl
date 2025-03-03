@@ -29,13 +29,20 @@ Extract tensors in an infinite PEPS with weight
 at positions `neighbors` relative to `(row, col)`
 """
 function collect_neighbors(
-    peps::InfiniteWeightPEPS, row::Int, col::Int, neighbors::Vector{Tuple{Int,Int,String}}
+    peps::InfiniteWeightPEPS,
+    row::Int,
+    col::Int,
+    neighbors::Vector{Tuple{Int,Int,Vector{Int}}},
 )
     Nr, Nc = size(peps)
+    _allfalse = ntuple(_ -> false, 4)
     return Dict(
         (x, y) => begin
             r, c = mod1(row + x, Nr), mod1(col + y, Nc)
-            _absorb_weight(peps.vertices[r, c], r, c, open_axs, peps.weights)
+            sqrts = Tuple(!(ax in open_axs) for ax in 1:4)
+            _absorb_weights(
+                peps.vertices[r, c], peps.weights, r, c, _allfalse, sqrts, _allfalse
+            )
         end for (x, y, open_axs) in neighbors
     )
 end

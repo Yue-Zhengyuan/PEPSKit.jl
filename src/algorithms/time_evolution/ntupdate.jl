@@ -30,9 +30,11 @@ function _ntu_bondx!(
     Nr, Nc = size(peps)
     @assert 1 <= row <= Nr && 1 <= col <= Nc
     cp1 = _next(col, Nc)
+    _allfalse = ntuple(_ -> false, 4)
+    _alltrue = ntuple(_ -> true, 4)
     A, B = peps.vertices[row, col], peps.vertices[row, cp1]
-    A = _absorb_weight(A, row, col, "", peps.weights)
-    B = _absorb_weight(B, row, cp1, "", peps.weights)
+    A = _absorb_weights(A, peps.weights, row, col, _allfalse, _alltrue, _allfalse)
+    B = _absorb_weights(B, peps.weights, row, cp1, _allfalse, _alltrue, _allfalse)
     X, a, b, Y = _qr_bond(A, B)
     benv = bondenv_ntu(row, col, X, Y, peps, alg.bondenv_alg)
     # apply gate
@@ -42,12 +44,12 @@ function _ntu_bondx!(
     a, s, b, info = bond_truncate(a, b, benv, alg.opt_alg)
     A, B = _qr_bond_undo(X, a, b, Y)
     # remove bond weights
-    for ax in (2, 4, 5)
-        A = absorb_weight(A, row, col, ax, peps.weights; sqrtwt=true, invwt=true)
-    end
-    for ax in (2, 3, 4)
-        B = absorb_weight(B, row, cp1, ax, peps.weights; sqrtwt=true, invwt=true)
-    end
+    A = _absorb_weights(
+        A, peps.weights, row, col, ntuple(dir -> (dir == EAST), 4), _alltrue, _alltrue
+    )
+    B = _absorb_weights(
+        B, peps.weights, row, cp1, ntuple(dir -> (dir == WEST), 4), _alltrue, _alltrue
+    )
     peps.vertices[row, col] = A / norm(A, Inf)
     peps.vertices[row, cp1] = B / norm(B, Inf)
     peps.weights[1, row, col] = s / norm(s, Inf)
