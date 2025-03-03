@@ -147,37 +147,37 @@ function _absorb_weights(
     weights::SUWeight,
     row::Int,
     col::Int,
-    skips::NTuple{4,Bool},
-    sqrts::NTuple{4,Bool},
-    invs::NTuple{4,Bool},
-)
+    axs::NTuple{N,Int},
+    sqrts::NTuple{N,Bool},
+    invs::NTuple{N,Bool},
+) where {N}
     Nr, Nc = size(weights)[2:end]
     @assert 1 <= row <= Nr && 1 <= col <= Nc
+    @assert 1 <= N <= 4
     tensors = Vector{AbstractTensorMap}()
     indices = Vector{Vector{Int}}()
     indices_t = collect(-1:-1:-5)
-    for (ax, (skip, sqrtwt, invwt)) in enumerate(zip(skips, sqrts, invs))
-        if !skip
-            axp1 = ax + 1
-            indices_t[axp1] *= -1
-            wt = if ax == NORTH
-                weights[2, row, col]
-            elseif ax == EAST
-                weights[1, row, col]
-            elseif ax == SOUTH
-                weights[2, _next(row, Nr), col]
-            else # WEST
-                weights[1, row, _prev(col, Nc)]
-            end
-            @assert !isdual(space(wt, 1)) && isdual(space(wt, 2))
-            if (!sqrtwt && !invwt)
-                push!(tensors, wt)
-            else
-                pow = (sqrtwt ? 1 / 2 : 1) * (invwt ? -1 : 1)
-                push!(tensors, sdiag_pow(wt, pow))
-            end
-            push!(indices, (ax in (NORTH, EAST) ? [axp1, -axp1] : [-axp1, axp1]))
+    for (ax, sqrtwt, invwt) in zip(axs, sqrts, invs)
+        @assert 1 <= ax <= 4
+        axp1 = ax + 1
+        indices_t[axp1] *= -1
+        wt = if ax == NORTH
+            weights[2, row, col]
+        elseif ax == EAST
+            weights[1, row, col]
+        elseif ax == SOUTH
+            weights[2, _next(row, Nr), col]
+        else # WEST
+            weights[1, row, _prev(col, Nc)]
         end
+        @assert !isdual(space(wt, 1)) && isdual(space(wt, 2))
+        if (!sqrtwt && !invwt)
+            push!(tensors, wt)
+        else
+            pow = (sqrtwt ? 1 / 2 : 1) * (invwt ? -1 : 1)
+            push!(tensors, sdiag_pow(wt, pow))
+        end
+        push!(indices, (ax in (NORTH, EAST) ? [axp1, -axp1] : [-axp1, axp1]))
     end
     push!(tensors, t)
     push!(indices, indices_t)
@@ -235,16 +235,7 @@ function absorb_weight(
     sqrtwt::Bool=false,
     invwt::Bool=false,
 )
-    @assert 2 <= ax <= 5
-    return _absorb_weights(
-        t,
-        weights,
-        row,
-        col,
-        ntuple(j -> (j != ax - 1), 4),
-        ntuple(j -> (j == ax - 1 ? sqrtwt : false), 4),
-        ntuple(j -> (j == ax - 1 ? invwt : false), 4),
-    )
+    return _absorb_weights(t, weights, row, col, (ax - 1,), (sqrtwt,), (invwt,))
 end
 
 """
@@ -254,12 +245,13 @@ Create `InfinitePEPS` from `InfiniteWeightPEPS` by absorbing bond weights into v
 """
 function InfinitePEPS(peps::InfiniteWeightPEPS)
     Nr, Nc = size(peps)
+    axs = Tuple(1:4)
     _allfalse = ntuple(_ -> false, 4)
     _alltrue = ntuple(_ -> true, 4)
     return InfinitePEPS(
         collect(
             _absorb_weights(
-                peps.vertices[r, c], peps.weights, r, c, _allfalse, _alltrue, _allfalse
+                peps.vertices[r, c], peps.weights, r, c, axs, _alltrue, _allfalse
             ) for r in 1:Nr, c in 1:Nc
         ),
     )
