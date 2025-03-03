@@ -1,3 +1,12 @@
+#= 
+The construction of bond environment for Neighborhood Tensor Update (NTU) is adapted from
+YASTN (https://github.com/yastn/yastn).
+Copyright 2024 The YASTN Authors. All Rights Reserved.
+Licensed under the Apache License, Version 2.0
+
+The direction names t/b/l/r mean top/bottom/left/right.
+=#
+
 const BondEnv{T,S} = AbstractTensorMap{T,S,2,2} where {T<:Number,S<:ElementarySpace}
 const Hair{T,S} = AbstractTensor{T,S,2} where {T<:Number,S<:ElementarySpace}
 const PEPSOrth{T,S} = AbstractTensor{T,S,4} where {T<:Number,S<:ElementarySpace}
@@ -125,7 +134,6 @@ function benv_tensor(
 end
 
 #= Free axes of different boundary tensors
-(t/b/l/r mean top/bottom/left/right)
 (C/E/H mean corner/edge/hair)
 
                                 H_t

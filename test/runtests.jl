@@ -48,7 +48,7 @@ end
         @time @safetestset "Gauge fixing" begin
             include("bondenv/benv_gaugefix.jl")
         end
-        @time @safetestset "Positiveness of NTU bond environments" begin
+        @time @safetestset "Exact NTU bond environments" begin
             include("bondenv/benv_ntu.jl")
         end
         @time @safetestset "Full bond environment from CTMRG" begin

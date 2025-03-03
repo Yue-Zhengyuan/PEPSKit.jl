@@ -37,19 +37,19 @@ function _su_bondx!(
     cp1 = _next(col, Nc)
     # absorb environment weights
     A, B = peps.vertices[row, col], peps.vertices[row, cp1]
-    A = _absorb_weight(A, row, col, "tbl", peps.weights)
-    B = _absorb_weight(B, row, cp1, "trb", peps.weights)
+    sqrtsA = ntuple(dir -> (dir == EAST), 4)
+    sqrtsB = ntuple(dir -> (dir == WEST), 4)
+    _allfalse = ntuple(_ -> false, 4)
+    _alltrue = ntuple(_ -> true, 4)
+    A = _absorb_weights(A, peps.weights, row, col, _allfalse, sqrtsA, _allfalse)
+    B = _absorb_weights(B, peps.weights, row, cp1, _allfalse, sqrtsB, _allfalse)
     # apply gate
     X, a, b, Y = _qr_bond(A, B)
     a, s, b, ϵ = _apply_gate(a, b, gate, alg.trscheme)
     A, B = _qr_bond_undo(X, a, b, Y)
     # remove environment weights
-    for ax in (2, 4, 5)
-        A = absorb_weight(A, row, col, ax, peps.weights; invwt=true)
-    end
-    for ax in (2, 3, 4)
-        B = absorb_weight(B, row, cp1, ax, peps.weights; invwt=true)
-    end
+    A = _absorb_weights(A, peps.weights, row, col, sqrtsA, _allfalse, _alltrue)
+    B = _absorb_weights(B, peps.weights, row, cp1, sqrtsB, _allfalse, _alltrue)
     # update tensor dict and weight on current bond 
     # (max element of weight is normalized to 1)
     peps.vertices[row, col], peps.vertices[row, cp1] = A, B
