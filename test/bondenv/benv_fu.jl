@@ -30,8 +30,8 @@ for row in 1:Nr, col in 1:Nc
     X, a, b, Y = PEPSKit._qr_bond(A, B)
     # verify that gauge fixing can reduce condition number
     benv = PEPSKit.bondenv_fu(row, col, X, Y, env)
-    # @assert [isdual(space(benv, ax)) for ax in 1:numind(benv)] == [0, 0, 1, 1]
-    ab = PEPSKit._combine_ab(a, b)
+    @assert [isdual(space(benv, ax)) for ax in 1:numind(benv)] == [0, 0, 1, 1]
+    @tensor ab[DX DY; da db] := a[DX; da D] * b[D db; DY]
     nrm1 = PEPSKit.inner_prod(benv, ab, ab)
     # gauge fixing
     Z = PEPSKit.positive_approx(benv)

@@ -62,20 +62,24 @@ function bond_truncate(
     @assert codomain(benv) == domain(benv)
     time00 = time()
     verbose = (alg.check_interval > 0)
-    a2b2 = _combine_ab(a, b)
-    # initialize truncated a, b
-    perm_ab = ((1, 3), (4, 2))
-    a, s, b = tsvd(a2b2, perm_ab; trunc=alg.trscheme)
+    #= initialize truncated a, b
+        -- DX - a - D - b - DY --
+                ↓       ↓
+                da      db
+    =#
+    @tensor a2b2[DX da; db DY] := a[DX da; D] * b[D; db DY]
+    a, s, b = tsvd(a2b2; trunc=alg.trscheme)
     s /= norm(s, Inf)
     a, b = absorb_s(a, s, b)
+    @tensor ab[DX DY; da db] := a[DX da; D] * b[D; db DY]
+    a2b2 = permute(a2b2, ((1, 4), (2, 3)))
     #= temporarily reorder axes of a and b to
         1 -a/b- 2
-            ↓
+            ↓       a/b[1 2; 3]
             3
     =#
     perm = ((1, 3), (2,))
     a, b = permute(a, perm), permute(b, perm)
-    ab = _combine_ab(a, b)
     # cost function will be normalized by initial value
     cost00 = cost_function_als(benv, ab, a2b2)
     fid = fidelity(benv, ab, a2b2)
@@ -98,7 +102,7 @@ function bond_truncate(
         Rb = _tensor_Rb(benv, a)
         Sb = _tensor_Sb(benv, a, a2b2)
         b, info_b = _solve_ab(Rb, Sb, b)
-        ab = _combine_ab(a, b)
+        @tensor ab[DX DY; da db] = a[DX D; da] * b[D DY; db]
         cost = cost_function_als(benv, ab, a2b2)
         fid = fidelity(benv, ab, a2b2)
         Δcost = abs(cost - cost0) / cost00
@@ -128,7 +132,7 @@ function bond_truncate(
         end
         converge && break
     end
-    a, s, b = tsvd!(permute(_combine_ab(a, b), perm_ab); trunc=alg.trscheme)
+    a, s, b = tsvd!(permute(ab, ((1, 3), (4, 2))); trunc=alg.trscheme)
     # normalize singular value spectrum
     s /= norm(s, Inf)
     return a, s, b, (; fid, Δfid)

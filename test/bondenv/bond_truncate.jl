@@ -26,7 +26,8 @@ for Vbondl in (Vint, Vint'), Vbondr in (Vint, Vint')
     # bond tensor (truncated SVD initialization)
     a0, s, b0 = tsvd(a2b2, perm_ab; trunc=trscheme)
     a0, b0 = PEPSKit.absorb_s(a0, s, b0)
-    fid0 = PEPSKit.fidelity(benv, PEPSKit._combine_ab(a0, b0), a2b2)
+    @tensor a0b0[DX DY; da db] := a0[DX da; D] * b0[D; db DY]
+    fid0 = PEPSKit.fidelity(benv, a0b0, a2b2)
     @info "Fidelity of simple SVD truncation = $fid0.\n"
     ss = Dict{String,DiagonalTensorMap}()
     for (label, alg) in (
@@ -37,7 +38,8 @@ for Vbondl in (Vint, Vint'), Vbondr in (Vint, Vint')
         @info "$label improved fidelity = $(info.fid)."
         display(ss[label])
         a1, b1 = PEPSKit.absorb_s(a1, ss[label], b1)
-        @test info.fid ≈ PEPSKit.fidelity(benv, PEPSKit._combine_ab(a1, b1), a2b2)
+        @tensor a1b1[DX DY; da db] := a1[DX da; D] * b1[D; db DY]
+        @test info.fid ≈ PEPSKit.fidelity(benv, a1b1, a2b2)
         @test info.fid > fid0
     end
     @test isapprox(ss["ALS"], ss["FET"], atol=1e-3)

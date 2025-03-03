@@ -138,8 +138,6 @@ function fullupdate(
     for count in 1:(fu_alg.maxiter)
         time0 = time()
         peps, env, wts, fid = fu_iter(gate, peps, env, fu_alg)
-        wtdiff = (count == 1) ? NaN : compare_weights(wts, wts0)
-        wts0 = deepcopy(wts)
         time1 = time()
         if count == 1 || count % fu_alg.reconv_int == 0
             # reconverge environment
@@ -149,6 +147,7 @@ function fullupdate(
             energy = cost_function(peps, env, ham) / (Nr * Nc)
             meast1 = time()
             ediff = energy - energy0
+            wtdiff = (count == 1) ? NaN : compare_weights(wts, wts0)
             @printf(
                 "%-4d %7.0e%10.5f%12.3e%11.3e  %.3f/%.3f\n",
                 count,
@@ -162,10 +161,14 @@ function fullupdate(
             if ediff > 0
                 @printf("Energy starts to increase. Abort evolution.\n")
                 # restore last checkpoint
-                peps, env, energy = deepcopy(peps0), deepcopy(env0), energy0
+                peps, env, energy, wts = deepcopy(peps0),
+                deepcopy(env0), energy0,
+                deepcopy(wts0)
                 break
             end
-            peps0, env0, energy0 = deepcopy(peps), deepcopy(env), energy
+            peps0, env0, energy0, wts0 = deepcopy(peps),
+            deepcopy(env), energy,
+            deepcopy(wts)
         end
     end
     # reconverge the environment tensors

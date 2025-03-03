@@ -131,30 +131,6 @@ function fidelity(
 end
 
 """
-Contract the axis between `a` and `b` tensors
-```
-    -- DX - a - D - b - DY --
-            ↓       ↓
-            da      db
-```
-"""
-function _combine_ab(
-    a::AbstractTensorMap{T,S,2,1}, b::AbstractTensorMap{T,S,1,2}
-) where {T<:Number,S<:ElementarySpace}
-    return @tensor ab[DX DY; da db] := a[DX da; D] * b[D; db DY]
-end
-function _combine_ab(
-    a::AbstractTensorMap{T,S,2,1}, b::AbstractTensorMap{T,S,2,1}
-) where {T<:Number,S<:ElementarySpace}
-    return @tensor ab[DX DY; da db] := a[DX D; da] * b[D DY; db]
-end
-function _combine_ab(
-    a::AbstractTensorMap{T,S,1,2}, b::AbstractTensorMap{T,S,2,1}
-) where {T<:Number,S<:ElementarySpace}
-    return @tensor ab[DX DY; da db] := a[DX; da D] * b[D db; DY]
-end
-
-"""
 Calculate the cost function
 ```
     f(a,b)  = ‖ |a1,b1⟩ - |a2,b2⟩ ‖^2
