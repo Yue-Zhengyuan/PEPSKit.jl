@@ -170,6 +170,7 @@ function _absorb_weights(
         else # WEST
             weights[1, row, _prev(col, Nc)]
         end
+        # TODO: remove the dual constraint
         @assert !isdual(space(wt, 1)) && isdual(space(wt, 2))
         if (!sqrtwt && !invwt)
             push!(tensors, wt)
