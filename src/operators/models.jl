@@ -163,10 +163,11 @@ function MPSKitModels.tj_model(
     J=1.0,
     mu=0.0,
     slave_fermion::Bool=false,
+    sigma::Bool=false
 )
     hopping =
-        TJOperators.e_plusmin(particle_symmetry, spin_symmetry; slave_fermion) +
-        TJOperators.e_minplus(particle_symmetry, spin_symmetry; slave_fermion)
+        TJOperators.e_plusmin(particle_symmetry, spin_symmetry; slave_fermion, sigma) +
+        TJOperators.e_minplus(particle_symmetry, spin_symmetry; slave_fermion, sigma)
     num = TJOperators.e_number(particle_symmetry, spin_symmetry; slave_fermion)
     heis =
         TJOperators.S_exchange(particle_symmetry, spin_symmetry; slave_fermion) -
