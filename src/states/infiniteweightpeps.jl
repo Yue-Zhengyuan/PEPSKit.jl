@@ -148,8 +148,8 @@ function _absorb_weights(
     row::Int,
     col::Int,
     axs::NTuple{N,Int},
-    sqrts::NTuple{N,Bool},
-    invs::NTuple{N,Bool},
+    sqrtwts::NTuple{N,Bool},
+    invwt::Bool,
 ) where {N}
     Nr, Nc = size(weights)[2:end]
     @assert 1 <= row <= Nr && 1 <= col <= Nc
@@ -157,7 +157,7 @@ function _absorb_weights(
     tensors = Vector{AbstractTensorMap}()
     indices = Vector{Vector{Int}}()
     indices_t = collect(-1:-1:-5)
-    for (ax, sqrtwt, invwt) in zip(axs, sqrts, invs)
+    for (ax, sqrtwt) in zip(axs, sqrtwts)
         @assert 1 <= ax <= 4
         axp1 = ax + 1
         indices_t[axp1] *= -1
@@ -190,7 +190,7 @@ end
     absorb_weight(t::PEPSTensor, row::Int, col::Int, ax::Int, weights::SUWeight;
                   sqrtwt::Bool=false, invwt::Bool=false)
 
-Absorb or remove environment weight on axis `ax` of vertex tensor `t` 
+Absorb or remove environment weight on an axis of vertex tensor `t` 
 known to be located at position (`row`, `col`) in the unit cell. 
 Weights around the tensor at `(row, col)` are
 ```
@@ -207,7 +207,7 @@ Weights around the tensor at `(row, col)` are
 - `t::T`: The vertex tensor to which the weight will be absorbed. The first axis of `t` should be the physical axis. 
 - `row::Int`: The row index specifying the position in the tensor network.
 - `col::Int`: The column index specifying the position in the tensor network.
-- `ax::Int`: The axis along which the weight is absorbed.
+- `ax::Int`: The axis into which the weight is absorbed, taking values from 1 to 4, standing for north, east, south, west respectively.
 - `weights::SUWeight`: The weight object to absorb into the tensor.
 - `sqrtwt::Bool=false` (optional): If `true`, the square root of the weight is absorbed.
 - `invwt::Bool=false` (optional): If `true`, the inverse of the weight is absorbed.
@@ -217,13 +217,13 @@ The optional kwargs `sqrtwt` and `invwt` allow taking the square root or the inv
 
 # Examples
 ```julia
-# Absorb the weight into the 2nd axis of tensor at position (2, 3)
-absorb_weight(t, 2, 3, 2, weights)
+# Absorb the weight into the north axis of tensor at position (2, 3)
+absorb_weight(t, 2, 3, 1, weights)
 
-# Absorb the square root of the weight into the tensor
-absorb_weight(t, 2, 3, 2, weights; sqrtwt=true)
+# Absorb the square root of the weight into the south axis
+absorb_weight(t, 2, 3, 3, weights; sqrtwt=true)
 
-# Absorb the inverse of (i.e. remove) the weight into the tensor
+# Absorb the inverse of (i.e. remove) the weight into the east axis
 absorb_weight(t, 2, 3, 2, weights; invwt=true)
 ```
 """
@@ -236,7 +236,7 @@ function absorb_weight(
     sqrtwt::Bool=false,
     invwt::Bool=false,
 )
-    return _absorb_weights(t, weights, row, col, (ax - 1,), (sqrtwt,), (invwt,))
+    return _absorb_weights(t, weights, row, col, (ax,), (sqrtwt,), invwt)
 end
 
 """
@@ -247,13 +247,11 @@ Create `InfinitePEPS` from `InfiniteWeightPEPS` by absorbing bond weights into v
 function InfinitePEPS(peps::InfiniteWeightPEPS)
     Nr, Nc = size(peps)
     axs = Tuple(1:4)
-    _allfalse = ntuple(_ -> false, 4)
-    _alltrue = ntuple(_ -> true, 4)
+    _alltrue = ntuple(Returns(true), 4)
     return InfinitePEPS(
         collect(
-            _absorb_weights(
-                peps.vertices[r, c], peps.weights, r, c, axs, _alltrue, _allfalse
-            ) for r in 1:Nr, c in 1:Nc
+            _absorb_weights(peps.vertices[r, c], peps.weights, r, c, axs, _alltrue, false)
+            for r in 1:Nr, c in 1:Nc
         ),
     )
 end
