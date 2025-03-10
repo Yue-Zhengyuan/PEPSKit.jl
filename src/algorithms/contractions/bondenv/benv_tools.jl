@@ -140,31 +140,31 @@ end
 #= Free axes of different boundary tensors
 (C/E/H mean corner/edge/hair)
 
-                       H_t
+                       H_n
                         |
 
-            C_tl -   - E_t -   - C_tr
+            C_nw -   - E_n -   - C_ne
             |           |           |
 
             |           | /         |
-    H_l -   E_l -    - ket -    - E_r   - H_r
+    H_w -   E_w -    - ket -    - E_e   - H_e
             |           |           |
 
             |           |           |
-            C_bl -   - E_b -   - C_br
+            C_sw -   - E_s -   - C_se
 
                         |
-                       H_b
+                       H_s
 =#
-const open_axs_hair = Dict(:t => [SOUTH], :r => [WEST], :b => [NORTH], :l => [EAST])
+const open_axs_hair = Dict(:n => [SOUTH], :e => [WEST], :s => [NORTH], :w => [EAST])
 const open_axs_cor = Dict(
-    :tl => [EAST, SOUTH], :tr => [SOUTH, WEST], :br => [NORTH, WEST], :bl => [NORTH, EAST]
+    :nw => [EAST, SOUTH], :ne => [SOUTH, WEST], :se => [NORTH, WEST], :sw => [NORTH, EAST]
 )
 const open_axs_edge = Dict(
-    :t => [EAST, SOUTH, WEST],
-    :r => [NORTH, SOUTH, WEST],
-    :b => [NORTH, EAST, WEST],
-    :l => [NORTH, EAST, SOUTH],
+    :n => [EAST, SOUTH, WEST],
+    :e => [NORTH, SOUTH, WEST],
+    :s => [NORTH, EAST, WEST],
+    :w => [NORTH, EAST, SOUTH],
 )
 
 # construction of hairs
@@ -213,7 +213,7 @@ Construct the top-left corner
     -1/-2       -3/-4
 ```
 """
-function enlarge_corner_tl(
+function enlarge_corner_nw(
     ctl::AbstractTensor{T,S,4},
     et::AbstractTensor{T,S,6},
     el::AbstractTensor{T,S,6},
@@ -240,7 +240,7 @@ Construct the bottom-right corner
     -7/-8 ═════ eb ═ D4 ══ cbr
 ```
 """
-function enlarge_corner_br(
+function enlarge_corner_se(
     cbr::AbstractTensor{T,S,4},
     eb::AbstractTensor{T,S,6},
     er::AbstractTensor{T,S,6},
