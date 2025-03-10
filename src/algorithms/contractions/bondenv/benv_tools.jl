@@ -41,7 +41,7 @@ function collect_neighbors(
         (x, y) => begin
             r, c = mod1(row + x, Nr), mod1(col + y, Nc)
             sqrts = Tuple(!(ax in open_axs) for ax in 1:4)
-            _absorb_weights(peps.vertices[r, c], peps.weights, r, c, axs, sqrts, _allfalse)
+            _absorb_weights(peps.vertices[r, c], peps.weights, r, c, axs, sqrts, false)
         end for (x, y, open_axs) in neighbors
     )
 end
