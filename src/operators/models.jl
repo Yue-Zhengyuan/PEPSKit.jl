@@ -180,32 +180,3 @@ function MPSKitModels.tj_model(
     end
     return nearest_neighbour_hamiltonian(fill(pspace, size(lattice)), h)
 end
-
-function MPSKitModels.sigmatj_model(
-    T::Type{<:Number},
-    particle_symmetry::Type{<:Sector},
-    spin_symmetry::Type{<:Sector},
-    lattice::InfiniteSquare;
-    t=2.5,
-    J=1.0,
-    mu=0.0,
-    slave_fermion::Bool=false,
-)
-    hopping = (
-        TJOperators.e_plusmin_up(particle_symmetry, spin_symmetry; slave_fermion) -
-        TJOperators.e_plusmin_down(particle_symmetry, spin_symmetry; slave_fermion) +
-        TJOperators.e_minplus_up(particle_symmetry, spin_symmetry; slave_fermion) -
-        TJOperators.e_minplus_down(particle_symmetry, spin_symmetry; slave_fermion)
-    )
-    num = TJOperators.e_number(particle_symmetry, spin_symmetry; slave_fermion)
-    heis =
-        TJOperators.S_exchange(particle_symmetry, spin_symmetry; slave_fermion) -
-        (1 / 4) * (num ⊗ num)
-    pspace = space(num, 1)
-    unit = TensorKit.id(pspace)
-    h = (-t) * hopping + J * heis - (mu / 4) * (num ⊗ unit + unit ⊗ num)
-    if T <: Real
-        h = real(h)
-    end
-    return nearest_neighbour_hamiltonian(fill(pspace, size(lattice)), h)
-end
