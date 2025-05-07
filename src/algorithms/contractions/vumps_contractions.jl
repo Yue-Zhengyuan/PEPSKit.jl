@@ -4,9 +4,29 @@ using MPSKit: GenericMPSTensor, MPSBondTensor
 # Environment transfer functions
 #
 
+function MPSKit.transfer_left(
+    GL::GenericMPSTensor{S,N},
+    O::Union{PEPSSandwich,PEPOSandwich},
+    A::GenericMPSTensor{S,N},
+    Ā::GenericMPSTensor{S,N},
+) where {S,N}
+    Ā = twistdual(Ā, 2:N)
+    return _transfer_left(GL, O, A, Ā)
+end
+
+function MPSKit.transfer_right(
+    GR::GenericMPSTensor{S,N},
+    O::Union{PEPSSandwich,PEPOSandwich},
+    A::GenericMPSTensor{S,N},
+    Ā::GenericMPSTensor{S,N},
+) where {S,N}
+    Ā = twistdual(Ā, 2:N)
+    return _transfer_right(GR, O, A, Ā)
+end
+
 ## PEPS
 
-function MPSKit.transfer_left(
+function _transfer_left(
     GL::GenericMPSTensor{S,3},
     O::PEPSSandwich,
     A::GenericMPSTensor{S,3},
@@ -20,7 +40,7 @@ function MPSKit.transfer_left(
         A[χ_NW D_N_above D_N_below; χ_NE]
 end
 
-function MPSKit.transfer_right(
+function _transfer_right(
     GR::GenericMPSTensor{S,3},
     O::PEPSSandwich,
     A::GenericMPSTensor{S,3},
@@ -36,96 +56,7 @@ end
 
 ## PEPO
 
-# some plumbing for generic expressions...
-
-# side=:W for argument, side=:E for output, PEPO height H
-function _pepo_leftenv_expr(envname, side::Symbol, H::Int)
-    return tensorexpr(
-        envname,
-        (
-            envlabel(:S, side),
-            virtuallabel(side, :top),
-            ntuple(i -> virtuallabel(side, :mid, i), H)...,
-            virtuallabel(side, :bot),
-        ),
-        (envlabel(:N, side),),
-    )
-end
-
-# side=:E for argument, side=:W for output, PEPO height H
-function _pepo_rightenv_expr(envname, side::Symbol, H::Int)
-    return tensorexpr(
-        envname,
-        (
-            envlabel(:N, side),
-            virtuallabel(side, :top),
-            ntuple(i -> virtuallabel(side, :mid, i), H)...,
-            virtuallabel(side, :bot),
-        ),
-        (envlabel(:S, side),),
-    )
-end
-
-# side=:N for ket MPS, side=:S for bra MPS, PEPO height H
-function _pepo_mpstensor_expr(tensorname, side::Symbol, H::Int)
-    return tensorexpr(
-        tensorname,
-        (
-            envlabel(side, :W),
-            virtuallabel(side, :top),
-            ntuple(i -> virtuallabel(side, :mid, i), H)...,
-            virtuallabel(side, :bot),
-        ),
-        (envlabel(side, :E),),
-    )
-end
-
-# layer=:top for ket PEPS, layer=:bot for bra PEPS, connects to PEPO slice H
-function _pepo_pepstensor_expr(tensorname, layer::Symbol, h::Int)
-    return tensorexpr(
-        tensorname,
-        (physicallabel(h),),
-        (
-            virtuallabel(:N, layer),
-            virtuallabel(:E, layer),
-            virtuallabel(:S, layer),
-            virtuallabel(:W, layer),
-        ),
-    )
-end
-
-# PEPO slice h
-function _pepo_pepotensor_expr(tensorname, h::Int)
-    return tensorexpr(
-        tensorname,
-        (physicallabel(h + 1), physicallabel(h)),
-        (
-            virtuallabel(:N, :mid, h),
-            virtuallabel(:E, :mid, h),
-            virtuallabel(:S, :mid, h),
-            virtuallabel(:W, :mid, h),
-        ),
-    )
-end
-
-# specialize simple case
-function MPSKit.transfer_left(
-    GL::GenericMPSTensor{S,4},
-    O::PEPOSandwich{1},
-    A::GenericMPSTensor{S,4},
-    Ā::GenericMPSTensor{S,4},
-) where {S}
-    return @autoopt @tensor GL′[χ_SE D_E_above D_E_mid D_E_below; χ_NE] :=
-        GL[χ_SW D_W_above D_W_mid D_W_below; χ_NW] *
-        conj(Ā[χ_SW D_S_above D_S_mid D_S_below; χ_SE]) *
-        ket(O)[d_in; D_N_above D_E_above D_S_above D_W_above] *
-        only(pepo(O))[d_out d_in; D_N_mid D_E_mid D_S_mid D_W_mid] *
-        conj(bra(O)[d_out; D_N_below D_E_below D_S_below D_W_below]) *
-        A[χ_NW D_N_above D_N_mid D_N_below; χ_NE]
-end
-
-# general case
-@generated function MPSKit.transfer_left(
+@generated function _transfer_left(
     GL::GenericMPSTensor{S,N},
     O::PEPOSandwich{H},
     A::GenericMPSTensor{S,N},
@@ -134,15 +65,11 @@ end
     # sanity check
     @assert H == N - 3
 
-    GL´_e = _pepo_leftenv_expr(:GL´, :E, H)
-    GL_e = _pepo_leftenv_expr(:GL, :W, H)
-    A_e = _pepo_mpstensor_expr(:A, :N, H)
-    Ā_e = _pepo_mpstensor_expr(:Ā, :S, H)
-    ket_e = _pepo_pepstensor_expr(:(ket(O)), :top, 1)
-    bra_e = _pepo_pepstensor_expr(:(bra(O)), :bot, H + 1)
-    pepo_es = map(1:H) do h
-        return _pepo_pepotensor_expr(:(pepo(O)[$h]), h)
-    end
+    GL´_e = _pepo_edge_expr(:GL´, :SE, :NE, :E, H)
+    GL_e = _pepo_edge_expr(:GL, :SW, :NW, :W, H)
+    A_e = _pepo_edge_expr(:A, :NW, :NE, :N, H)
+    Ā_e = _pepo_edge_expr(:Ā, :SW, :SE, :S, H)
+    ket_e, bra_e, pepo_es = _pepo_sandwich_expr(:O, H)
 
     rhs = Expr(
         :call,
@@ -158,24 +85,7 @@ end
     return macroexpand(@__MODULE__, :(return @autoopt @tensor $GL´_e := $rhs))
 end
 
-# specialize simple case
-function MPSKit.transfer_right(
-    GR::GenericMPSTensor{S,4},
-    O::PEPOSandwich{1},
-    A::GenericMPSTensor{S,4},
-    Ā::GenericMPSTensor{S,4},
-) where {S}
-    return @tensor GR′[χ_NW D_W_above D_W_mid D_W_below; χ_SW] :=
-        GR[χ_NE D_E_above D_E_mid D_E_below; χ_SE] *
-        conj(Ā[χ_SW D_S_above D_S_mid D_S_below; χ_SE]) *
-        ket(O)[d_in; D_N_above D_E_above D_S_above D_W_above] *
-        only(pepo(O))[d_out d_in; D_N_mid D_E_mid D_S_mid D_W_mid] *
-        conj(bra(O)[d_out; D_N_below D_E_below D_S_below D_W_below]) *
-        A[χ_NW D_N_above D_N_mid D_N_below; χ_NE]
-end
-
-# general case
-@generated function MPSKit.transfer_right(
+@generated function _transfer_right(
     GR::GenericMPSTensor{S,N},
     O::PEPOSandwich{H},
     A::GenericMPSTensor{S,N},
@@ -184,15 +94,11 @@ end
     # sanity check
     @assert H == N - 3
 
-    GR´_e = _pepo_rightenv_expr(:GR´, :W, H)
-    GR_e = _pepo_rightenv_expr(:GR, :E, H)
-    A_e = _pepo_mpstensor_expr(:A, :N, H)
-    Ā_e = _pepo_mpstensor_expr(:Ā, :S, H)
-    ket_e = _pepo_pepstensor_expr(:(ket(O)), :top, 1)
-    bra_e = _pepo_pepstensor_expr(:(bra(O)), :bot, H + 1)
-    pepo_es = map(1:H) do h
-        return _pepo_pepotensor_expr(:(pepo(O)[$h]), h)
-    end
+    GR´_e = _pepo_edge_expr(:GR´, :NW, :SW, :W, H)
+    GR_e = _pepo_edge_expr(:GR, :NE, :SE, :E, H)
+    A_e = _pepo_edge_expr(:A, :NW, :NE, :N, H)
+    Ā_e = _pepo_edge_expr(:Ā, :SW, :SE, :S, H)
+    ket_e, bra_e, pepo_es = _pepo_sandwich_expr(:O, H)
 
     rhs = Expr(
         :call,
@@ -228,34 +134,84 @@ function MPSKit.contract_mpo_expval(
     return environment_overlap(GL´, GR)
 end
 
-#
-# Derivative contractions
-#
+# PEPS Derivative contractions
+# ----------------------------
+# This is appropriating the MPSKit MPO derivative structures, which might not be the best
+# idea in the long run.
 
-@generated function MPSKit.∂C(
-    C::MPSBondTensor{S}, GL::GenericMPSTensor{S,N}, GR::GenericMPSTensor{S,N}
-) where {S,N}
+const PEPS_C_Hamiltonian{S,N} = MPSKit.MPO_C_Hamiltonian{
+    <:GenericMPSTensor{S,N},<:GenericMPSTensor{S,N}
+} # this one is technically type-piracy
+PEPS_C_Hamiltonian(GL, GR) = MPSKit.MPODerivativeOperator(GL, (), GR)
+
+const PEPS_AC_Hamiltonian{S,N} = MPSKit.MPO_AC_Hamiltonian{
+    <:GenericMPSTensor{S,N},<:PEPSSandwich,<:GenericMPSTensor{S,N}
+}
+PEPS_AC_Hamiltonian(GL, O, GR) = MPSKit.MPODerivativeOperator(GL, (O,), GR)
+
+const PEPS_AC2_Hamiltonian{S,N} = MPSKit.MPO_AC2_Hamiltonian{
+    <:GenericMPSTensor{S,N},<:PEPSSandwich,<:PEPSSandwich,<:GenericMPSTensor{S,N}
+}
+PEPS_AC2_Hamiltonian(GL, O1, O2, GR) = MPSKit.MPODerivativeOperator(GL, (O1, O2), GR)
+
+# Constructors
+#
+function MPSKit.C_hamiltonian(site::Int, below, ::InfiniteTransferMatrix, above, envs)
+    GL = leftenv(envs, site + 1, below)
+    GL = twistdual(GL, 1)
+    GR = rightenv(envs, site, below)
+    GR = twistdual(GR, numind(GR))
+    return PEPS_C_Hamiltonian(GL, GR)
+end
+
+function MPSKit.AC_hamiltonian(
+    site::Int, below, operator::InfiniteTransferPEPS, above, envs
+)
+    GL = leftenv(envs, site, below)
+    GL = twistdual(GL, 1)
+    GR = rightenv(envs, site, below)
+    GR = twistdual(GR, numind(GR))
+    return PEPS_AC_Hamiltonian(GL, operator[site], GR)
+end
+
+function MPSKit.AC2_hamiltonian(
+    site::Int, below, operator::InfiniteTransferPEPS, above, envs
+)
+    GL = leftenv(envs, site, below)
+    GL = twistdual(GL, 1)
+    GR = rightenv(envs, site + 1, below)
+    GR = twistdual(GR, numind(GR))
+    return PEPS_AC2_Hamiltonian(GL, operator[site], operator[site + 1], GR)
+end
+
+# Actions
+#
+@generated function (h::PEPS_C_Hamiltonian{S,N})(C::MPSBondTensor{S}) where {S,N}
     C´_e = tensorexpr(:C´, -1, -2)
     C_e = tensorexpr(:C, 1, 2)
-    GL_e = tensorexpr(:GL, (-1, (3:(N + 1))...), 1)
-    GR_e = tensorexpr(:GR, 2:(N + 1), -2)
+    GL_e = tensorexpr(:(h.leftenv), (-1, (3:(N + 1))...), 1)
+    GR_e = tensorexpr(:(h.rightenv), (2:(N + 1)...,), -2)
     return macroexpand(@__MODULE__, :(return @tensor $C´_e := $GL_e * $C_e * $GR_e))
 end
 
-## PEPS
-
-function MPSKit.∂AC(
-    AC::GenericMPSTensor{S,3},
-    O::PEPSSandwich,
-    GL::GenericMPSTensor{S,3},
-    GR::GenericMPSTensor{S,3},
-) where {S}
+function (h::PEPS_AC_Hamiltonian{S,N})(AC::GenericMPSTensor{S,N}) where {S,N}
     return @autoopt @tensor AC′[χ_SW D_S_above D_S_below; χ_SE] :=
-        GL[χ_SW D_W_above D_W_below; χ_NW] *
+        h.leftenv[χ_SW D_W_above D_W_below; χ_NW] *
         AC[χ_NW D_N_above D_N_below; χ_NE] *
-        GR[χ_NE D_E_above D_E_below; χ_SE] *
-        ket(O)[d; D_N_above D_E_above D_S_above D_W_above] *
-        conj(bra(O)[d; D_N_below D_E_below D_S_below D_W_below])
+        h.rightenv[χ_NE D_E_above D_E_below; χ_SE] *
+        ket(h.operators[1])[d; D_N_above D_E_above D_S_above D_W_above] *
+        conj(bra(h.operators[1])[d; D_N_below D_E_below D_S_below D_W_below])
+end
+
+function (h::PEPS_AC2_Hamiltonian{S,3})(AC2::AbstractTensorMap{<:Any,S,3,3}) where {S}
+    return @autoopt @tensor AC2′[χ_SW D_S_above1 D_S_below1; χ_SE D_S_below2 D_S_above2] :=
+        h.leftenv[χ_SW D_W_above1 D_W_below1; χ_NW] *
+        AC2[χ_NW D_N_above1 D_N_below1; χ_NE D_N_below2 D_N_above2] *
+        h.rightenv[χ_NE D_E_above2 D_E_below2; χ_SE] *
+        ket(h.operators[1])[d1; D_N_above1 D_E_above1 D_S_above1 D_W_above1] *
+        conj(bra(h.operators[1])[d1; D_N_below1 D_E_below1 D_S_below1 D_W_below1]) *
+        ket(h.operators[2])[d2; D_N_above2 D_E_above2 D_S_above2 D_E_above1] *
+        conj(bra(h.operators[2])[d2; D_N_below2 D_E_below2 D_S_below2 D_E_below1])
 end
 
 # PEPS derivative
@@ -274,42 +230,32 @@ function ∂peps(
         conj(ĀC[χ_SW D_S_above D_S_below; χ_SE])
 end
 
-## PEPO
+# PEPO Derivative contractions
+# ----------------------------
+const PEPO_AC_Hamiltonian{S,N,H} = MPSKit.MPO_AC_Hamiltonian{
+    <:GenericMPSTensor{S,N},<:PEPOSandwich{H},<:GenericMPSTensor{S,N}
+}
+PEPO_AC_Hamiltonian(GL, O, GR) = MPSKit.MPODerivativeOperator(GL, (O,), GR)
 
-# specialize simple case
-function MPSKit.∂AC(
-    AC::GenericMPSTensor{S,4},
-    O::PEPOSandwich{1},
-    GL::GenericMPSTensor{S,4},
-    GR::GenericMPSTensor{S,4},
-) where {S}
-    return @tensor AC′[χ_SW D_S_above D_S_mid D_S_below; χ_SE] :=
-        GL[χ_SW D_W_above D_W_mid D_W_below; χ_NW] *
-        AC[χ_NW D_N_above D_N_mid D_N_below; χ_NE] *
-        GR[χ_NE D_E_above D_E_mid D_E_below; χ_SE] *
-        ket(O)[d_in; D_N_above D_E_above D_S_above D_W_above] *
-        only(pepo(O))[d_out d_in; D_N_mid D_E_mid D_S_mid D_W_mid] *
-        conj(bra(O)[d_out; D_N_below D_E_below D_S_below D_W_below])
+function MPSKit.AC_hamiltonian(
+    site::Int, below, operator::InfiniteTransferPEPO, above, envs
+)
+    GL = leftenv(envs, site, below)
+    GL = twistdual(GL, 1)
+    GR = rightenv(envs, site, below)
+    GR = twistdual(GR, numind(GR))
+    return PEPO_AC_Hamiltonian(GL, operator[site], GR)
 end
 
-@generated function MPSKit.∂AC(
-    AC::GenericMPSTensor{S,N},
-    O::PEPOSandwich{H},
-    GL::GenericMPSTensor{S,N},
-    GR::GenericMPSTensor{S,N},
-) where {S,N,H}
+@generated function (h::PEPO_AC_Hamiltonian{S,N,H})(AC::GenericMPSTensor{S,N}) where {S,N,H}
     # sanity check
-    @assert H == N - 3
+    @assert H == N - 3 "Incompatible number of legs and layers"
 
-    AC´_e = _pepo_mpstensor_expr(:AC´, :S, H)
-    AC_e = _pepo_mpstensor_expr(:AC, :N, H)
-    GL_e = _pepo_leftenv_expr(:GL, :W, H)
-    GR_e = _pepo_rightenv_expr(:GR, :E, H)
-    ket_e = _pepo_pepstensor_expr(:(ket(O)), :top, 1)
-    bra_e = _pepo_pepstensor_expr(:(bra(O)), :bot, H + 1)
-    pepo_es = map(1:H) do h
-        return _pepo_pepotensor_expr(:(pepo(O)[$h]), h)
-    end
+    AC´_e = _pepo_edge_expr(:AC´, :SW, :SE, :S, H)
+    AC_e = _pepo_edge_expr(:AC, :NW, :NE, :N, H)
+    GL_e = _pepo_edge_expr(:(h.leftenv), :SW, :NW, :W, H)
+    GR_e = _pepo_edge_expr(:(h.rightenv), :NE, :SE, :E, H)
+    ket_e, bra_e, pepo_es = _pepo_sandwich_expr(:(h.operators[1]), H)
 
     rhs = Expr(:call, :*, AC_e, GL_e, GR_e, ket_e, Expr(:call, :conj, bra_e), pepo_es...)
 
@@ -324,23 +270,6 @@ ket(p::∂PEPOSandwich) = p[1]
 pepo(p::∂PEPOSandwich) = p[2:end]
 pepo(p::∂PEPOSandwich, i::Int) = p[1 + i]
 
-# specialize simple case
-function ∂peps(
-    AC::GenericMPSTensor{S,4},
-    ĀC::GenericMPSTensor{S,4},
-    O::∂PEPOSandwich{1},
-    GL::GenericMPSTensor{S,4},
-    GR::GenericMPSTensor{S,4},
-) where {S}
-    return @tensor ∂p[d_out; D_N_below D_E_below D_S_below D_W_below] :=
-        GL[χ_SW D_W_above D_W_mid D_W_below; χ_NW] *
-        AC[χ_NW D_N_above D_N_mid D_N_below; χ_NE] *
-        ket(O)[d_in; D_N_above D_E_above D_S_above D_W_above] *
-        only(pepo(O))[d_out d_in; D_N_mid D_E_mid D_S_mid D_W_mid] *
-        GR[χ_NE D_E_above D_E_mid D_E_below; χ_SE] *
-        conj(ĀC[χ_SW D_S_above D_S_mid D_S_below; χ_SE])
-end
-
 @generated function ∂peps(
     AC::GenericMPSTensor{S,N},
     ĀC::GenericMPSTensor{S,N},
@@ -352,14 +281,11 @@ end
     @assert H == N - 3
 
     ∂p_e = _pepo_pepstensor_expr(:∂p, :bot, H + 1)
-    AC_e = _pepo_mpstensor_expr(:AC, :N, H)
-    ĀC_e = _pepo_mpstensor_expr(:ĀC, :S, H)
-    GL_e = _pepo_leftenv_expr(:GL, :W, H)
-    GR_e = _pepo_rightenv_expr(:GR, :E, H)
-    ket_e = _pepo_pepstensor_expr(:(ket(O)), :top, 1)
-    pepo_es = map(1:H) do h
-        return _pepo_pepotensor_expr(:(pepo(O, $h)), h)
-    end
+    AC_e = _pepo_edge_expr(:AC, :NW, :NE, :N, H)
+    ĀC_e = _pepo_edge_expr(:ĀC, :SW, :SE, :S, H)
+    GL_e = _pepo_edge_expr(:GL, :SW, :NW, :W, H)
+    GR_e = _pepo_edge_expr(:GR, :NE, :SE, :E, H)
+    ket_e, bra_e, pepo_es = _pepo_sandwich_expr(:O, H)
 
     rhs = Expr(:call, :*, AC_e, Expr(:call, :conj, ĀC_e), GL_e, GR_e, ket_e, pepo_es...)
 

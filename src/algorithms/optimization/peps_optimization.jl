@@ -1,16 +1,24 @@
 """
-    struct PEPSOptimize{G}
-    PEPSOptimize(; kwargs...)
+$(TYPEDEF)
 
 Algorithm struct for PEPS ground-state optimization using AD. See [`fixedpoint`](@ref) for details.
 
-## Keyword arguments
+## Fields
 
-* `boundary_alg::Union{NamedTuple,<:CTMRGAlgorithm}` : Supply boundary algorithm parameters using either a `NamedTuple` of keyword arguments or a `CTMRGAlgorithm` directly. See [`leading_boundary`](@ref) for a description of all possible keyword arguments.
-* `gradient_alg::Union{NamedTuple,Nothing,<:GradMode}` : Supply gradient algorithm parameters using either a `NamedTuple` of keyword arguments, `nothing`, or a `GradMode` directly. See [`fixedpoint`](@ref) for a description of all possible keyword arguments.
-* `optimizer_alg::Union{NamedTuple,<:OptimKit.OptimizationAlgorithm}` : Supply optimizer algorithm parameters using either a `NamedTuple` of keyword arguments, or a `OptimKit.OptimizationAlgorithm` directly. See [`fixedpoint`](@ref) for a description of all possible keyword arguments.
-* `reuse_env::Bool=$(Defaults.reuse_env)` : If `true`, the current optimization step is initialized on the previous environment, otherwise a random environment is used.
-* `symmetrization::Union{Nothing,SymmetrizationStyle}=nothing` : Accepts `nothing` or a `SymmetrizationStyle`, in which case the PEPS and PEPS gradient are symmetrized after each optimization iteration.
+$(TYPEDFIELDS)
+
+## Constructors
+
+    PEPSOptimize(; kwargs...)
+
+Construct a PEPS optimization algorithm struct based on keyword arguments.
+For a full description, see [`fixedpoint`](@ref). The supported keywords are:
+
+* `boundary_alg::Union{NamedTuple,<:CTMRGAlgorithm}`
+* `gradient_alg::Union{NamedTuple,Nothing,<:GradMode}`
+* `optimizer_alg::Union{NamedTuple,<:OptimKit.OptimizationAlgorithm}`
+* `reuse_env::Bool=$(Defaults.reuse_env)`
+* `symmetrization::Union{Nothing,SymmetrizationStyle}=nothing`
 """
 struct PEPSOptimize{G}
     boundary_alg::CTMRGAlgorithm
@@ -74,6 +82,8 @@ function _OptimizationAlgorithm(;
     tol=Defaults.optimizer_tol,
     maxiter=Defaults.optimizer_maxiter,
     verbosity=Defaults.optimizer_verbosity,
+    ls_maxiter=Defaults.ls_maxiter,
+    ls_maxfg=Defaults.ls_maxfg,
     lbfgs_memory=Defaults.lbfgs_memory,
     # TODO: add linesearch, ... to kwargs and defaults?
 )
@@ -84,17 +94,16 @@ function _OptimizationAlgorithm(;
 
     # instantiate algorithm
     return if alg_type <: LBFGS
-        alg_type(lbfgs_memory; gradtol=tol, maxiter, verbosity)
+        alg_type(lbfgs_memory; gradtol=tol, maxiter, verbosity, ls_maxiter, ls_maxfg)
     else
-        alg_type(; gradtol=tol, maxiter, verbosity)
+        alg_type(; gradtol=tol, maxiter, verbosity, ls_maxiter, ls_maxfg)
     end
 end
 
 """
-    fixedpoint(operator, peps₀::InfinitePEPS, env₀::CTMRGEnv; kwargs...)
+    fixedpoint(operator, peps₀::InfinitePEPS, env₀::CTMRGEnv; kwargs...) -> peps_final, env_final, cost_final, info
     # expert version:
-    fixedpoint(operator, peps₀::InfinitePEPS, env₀::CTMRGEnv, alg::PEPSOptimize;
-               finalize!=OptimKit._finalize!)
+    fixedpoint(operator, peps₀::InfinitePEPS, env₀::CTMRGEnv, alg::PEPSOptimize; finalize!=OptimKit._finalize!)
     
 Find the fixed point of `operator` (i.e. the ground state) starting from `peps₀` according
 to the supplied optimization parameters. The initial environment `env₀` serves as an
@@ -110,9 +119,10 @@ The optimization parameters can be supplied via the keyword arguments or directl
 * `tol::Real=$(Defaults.optimizer_tol)` : Overall tolerance for gradient norm convergence of the optimizer. Sets related tolerance such as the boundary and boundary-gradient tolerances to sensible defaults unless they are explictly specified.
 * `verbosity::Int=1` : Overall output information verbosity level, should be one of the following:
     0. Suppress all output
-    1. Optimizer output and warnings
-    2. Additionally print boundary information
-    3. All information including AD debug outputs
+    1. Only print warnings
+    2. Initialization and convergence info
+    3. Iteration info
+    4. Debug info including AD outputs
 * `reuse_env::Bool=$(Defaults.reuse_env)` : If `true`, the current optimization step is initialized on the previous environment, otherwise a random environment is used.
 * `symmetrization::Union{Nothing,SymmetrizationStyle}=nothing` : Accepts `nothing` or a `SymmetrizationStyle`, in which case the PEPS and PEPS gradient are symmetrized after each optimization iteration.
 * `(finalize!)=OptimKit._finalize!` : Inserts a `finalize!` function call after each optimization step by utilizing the `finalize!` kwarg of `OptimKit.optimize`. The function maps `(peps, env), f, g = finalize!((peps, env), f, g, numiter)`.
@@ -136,8 +146,8 @@ keyword arguments are:
 * `maxiter::Int=$(Defaults.gradient_maxiter)` : Maximal number of gradient problem iterations.
 * `alg::Symbol=:$(Defaults.gradient_alg)` : Gradient algorithm variant, can be one of the following:
     - `:geomsum` : Compute gradient directly from the geometric sum, see [`GeomSum`](@ref)
-    - `:manualiter` : Iterate gradient geometric sum manually, see ['ManualIter'](@ref)
-    - `:linsolver` : Solve fixed-point gradient linear problem using iterative solver, see ['LinSolver'](@ref)
+    - `:manualiter` : Iterate gradient geometric sum manually, see [`ManualIter`](@ref)
+    - `:linsolver` : Solve fixed-point gradient linear problem using iterative solver, see [`LinSolver`](@ref)
     - `:eigsolver` : Determine gradient via eigenvalue formulation of its Sylvester equation, see [`EigSolver`](@ref)
 * `verbosity::Int` : Gradient output verbosity, ≤0 by default to disable too verbose printing. Should only be >0 for debug purposes.
 * `iterscheme::Symbol=:$(Defaults.gradient_iterscheme)` : CTMRG iteration scheme determining mode of differentiation. This can be:
@@ -195,9 +205,9 @@ function fixedpoint(
     if isnothing(alg.symmetrization)
         retract = peps_retract
     else
-        retract, symm_finalize! = symmetrize_retract_and_finalize!(alg.symmetrization)
-        fin! = finalize!  # Previous finalize!
-        finalize! = (x, f, g, numiter) -> fin!(symm_finalize!(x, f, g, numiter)..., numiter)
+        retract, finalize! = symmetrize_retract_and_finalize!(
+            alg.symmetrization, peps_retract, finalize!
+        )
     end
 
     # :fixed mode compatibility
@@ -209,17 +219,6 @@ function fixedpoint(
             instead by passing gradient_alg=(; iterscheme=:diffgauge) to the fixedpoint \
             keyword arguments to work with purely real environments"
         end
-        if isnothing(alg.boundary_alg.projector_alg.svd_alg.rrule_alg) # incompatible with TensorKit SVD rrule
-            G = Base.typename(typeof(alg.gradient_alg)).wrapper # simple type without iterscheme parameter
-            gradient_alg = G{:diffgauge}(
-                (getproperty(alg.gradient_alg, f) for f in fieldnames(G))...
-            )
-            @reset alg.gradient_alg = gradient_alg
-            @warn ":fixed was converted to :diffgauge since :fixed mode and \
-            rrule_alg=nothing are incompatible - nothing uses the TensorKit \
-            reverse-rule requiring access to the untruncated SVD which FixedSVD does not \
-            have; select GMRES, BiCGStab or Arnoldi instead to use :fixed mode"
-        end
     end
 
     # initialize info collection vectors
@@ -229,9 +228,17 @@ function fixedpoint(
     gradnorms_unitcell = Vector{Matrix{T}}()
     times = Vector{Float64}()
 
+    # normalize the initial guess
+    peps₀ = peps_normalize(peps₀)
+
     # optimize operator cost function
-    (peps_final, env_final), cost, ∂cost, numfg, convergence_history = optimize(
-        (peps₀, env₀), alg.optimizer_alg; retract, inner=real_inner, finalize!
+    (peps_final, env_final), cost_final, ∂cost, numfg, convergence_history = optimize(
+        (peps₀, env₀),
+        alg.optimizer_alg;
+        retract,
+        inner=real_inner,
+        finalize!,
+        (transport!)=(peps_transport!),
     ) do (peps, env)
         start_time = time_ns()
         E, gs = withgradient(peps) do ψ
@@ -265,37 +272,95 @@ function fixedpoint(
         gradnorms_unitcell,
         times,
     )
-    return peps_final, env_final, cost, info
+    return peps_final, env_final, cost_final, info
 end
 
-# Update PEPS unit cell in non-mutating way
-# Note: Both x and η are InfinitePEPS during optimization
+"""
+    peps_normalize(A::InfinitePEPS)
+
+Normalize the individual tensors in the unit cell of an `InfinitePEPS` such that they each
+have unit Euclidean norm.
+"""
+function peps_normalize(A::InfinitePEPS)
+    normalized_tensors = normalize.(unitcell(A))
+    return InfinitePEPS(normalized_tensors)
+end
+
+"""
+$(SIGNATURES)
+
+Performs a norm-preserving retraction of an infinite PEPS `A = x[1]` along `η` with step
+size `α`, giving a new PEPS `A´`,
+```math
+A' ← \\cos ( α ‖η‖ / ‖A‖ ) A + \\sin ( α ‖η‖ / ‖A‖ ) ‖A‖ η / ‖η‖,
+```
+and corresponding directional derivative `ξ`,
+```math
+ξ = \\cos ( α ‖η‖ / ‖A‖ ) η - \\sin ( α ‖η‖ / ‖A‖ ) ‖η‖ A / ‖A‖,
+```
+such that ``⟨ A', ξ ⟩ = 0`` and ``‖A'‖ = ‖A‖``.
+"""
 function peps_retract(x, η, α)
-    peps = deepcopy(x[1])
-    peps.A .+= η.A .* α
+    peps = x[1]
     env = deepcopy(x[2])
-    return (peps, env), η
+
+    retractions = norm_preserving_retract.(unitcell(peps), unitcell(η), α)
+    peps´ = InfinitePEPS(map(first, retractions))
+    ξ = InfinitePEPS(map(last, retractions))
+
+    return (peps´, env), ξ
+end
+
+"""
+$(SIGNATURES)
+
+Transports a direction at `A = x[1]` to a valid direction at `A´ = x´[1]` corresponding to
+the norm-preserving retraction of `A` along `η` with step size `α`. In particular, starting
+from a direction `η` of the form
+```math
+ξ = ⟨ η / ‖η‖, ξ ⟩ η / ‖η‖ + Δξ
+```
+where ``⟨ Δξ, A ⟩ = ⟨ Δξ, η ⟩ = 0``, it returns
+```math
+ξ(α) = ⟨ η / ‖η‖, ξ ⟩ ( \\cos ( α ‖η‖ / ‖A‖ ) η / ‖η‖ - \\sin( α ‖η‖ / ‖A‖ ) A / ‖A‖ ) + Δξ
+```
+such that ``‖ξ(α)‖ = ‖ξ‖, ⟨ A', ξ(α) ⟩ = 0``.
+"""
+function peps_transport!(ξ, x, η, α, x´)
+    peps = x[1]
+    peps´ = x´[1]
+
+    norm_preserving_transport!.(
+        unitcell(ξ), unitcell(peps), unitcell(η), α, unitcell(peps´)
+    )
+
+    return ξ
 end
 
 # Take real valued part of dot product
 real_inner(_, η₁, η₂) = real(dot(η₁, η₂))
 
 """
-    symmetrize_retract_and_finalize!(symm::SymmetrizationStyle)
+    symmetrize_retract_and_finalize!(symm::SymmetrizationStyle, [retract, finalize!])
 
 Return the `retract` and `finalize!` function for symmetrizing the `peps` and `grad` tensors.
 """
-function symmetrize_retract_and_finalize!(symm::SymmetrizationStyle)
-    finf = function symmetrize_finalize!((peps, env), E, grad, _)
+function symmetrize_retract_and_finalize!(
+    symm::SymmetrizationStyle, retract=peps_retract, (finalize!)=OptimKit._finalize!
+)
+    function symmetrize_then_finalize!((peps, env), E, grad, numiter)
+        # symmetrize the gradient
         grad_symm = symmetrize!(grad, symm)
-        return (peps, env), E, grad_symm
+        # then finalize
+        return finalize!((peps, env), E, grad_symm, numiter)
     end
-    retf = function symmetrize_retract((peps, env), η, α)
-        peps_symm = deepcopy(peps)
-        peps_symm.A .+= η.A .* α
-        env′ = deepcopy(env)
-        symmetrize!(peps_symm, symm)
-        return (peps_symm, env′), η
+    function retract_then_symmetrize((peps, env), η, α)
+        # retract
+        (peps´, env´), ξ = retract((peps, env), η, α)
+        # symmetrize retracted point and directional derivative
+        peps´_symm = symmetrize!(peps´, symm)
+        ξ_symm = symmetrize!(ξ, symm)
+        return (peps´_symm, env´), ξ_symm
     end
-    return retf, finf
+    return retract_then_symmetrize, symmetrize_then_finalize!
 end
