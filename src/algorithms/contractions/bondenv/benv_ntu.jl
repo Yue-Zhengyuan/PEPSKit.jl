@@ -1,6 +1,6 @@
 #= 
-The construction of bond environment for Neighborhood Tensor Update (NTU) is adapted from
-YASTN (https://github.com/yastn/yastn).
+The construction of bond environment for Neighborhood Tensor Update (NTU) 
+is adapted from YASTN (https://github.com/yastn/yastn).
 Copyright 2024 The YASTN Authors. All Rights Reserved.
 Licensed under the Apache License, Version 2.0
 =#
@@ -28,40 +28,40 @@ function bondenv_ntu(
     row::Int, col::Int, X::T, Y::T, peps::InfiniteWeightPEPS, ::NTUEnvNN
 ) where {T<:Union{PEPSTensor,PEPSOrth}}
     neighbors = [
-        (-1, 0, "tl"),
-        (0, -1, "tbl"),
-        (1, 0, "bl"),
-        (1, 1, "rb"),
-        (0, 2, "trb"),
-        (-1, 1, "tr"),
+        (-1, 0, [NORTH, WEST]),
+        (0, -1, [NORTH, SOUTH, WEST]),
+        (1, 0, [SOUTH, WEST]),
+        (1, 1, [EAST, SOUTH]),
+        (0, 2, [NORTH, EAST, SOUTH]),
+        (-1, 1, [NORTH, EAST]),
     ]
     m = collect_neighbors(peps, row, col, neighbors)
     #= contraction indices
 
-                (-1 +0) ══ Dt ══ (-1 +1)
+                (-1 +0) ══ Dn ══ (-1 +1)
                     ║               ║
-            ........Dtl......       Dtr
+            ........Dnw......       Dne
                     ║       :       ║
-        (+0 -1) ═══ X ══ Dl : Dr ══ Y ═══ (+0 +2)
+        (+0 -1) ═══ X ══ Dw : De ══ Y ═══ (+0 +2)
                     ║       :       ║
-                    Dbl     :.......Dbr........
+                    Dsw     :.......Dse........
                     ║               ║
-                (+1 +0) ══ Db ══ (+1 +1)    
+                (+1 +0) ══ Ds ══ (+1 +1)    
     =#
     # bottom-left half
-    @autoopt @tensor benv_bl[Dbr1 Dbr0 Dl1 Dl0 Dtl1 Dtl0] :=
-        cor_br(m[1, 1])[Dbr1 Dbr0 Db1 Db0] *
-        cor_bl(m[1, 0])[Dbl1 Dbl0 Db1 Db0] *
-        edge_l(X, hair_l(m[0, -1]))[Dtl1 Dtl0 Dl1 Dl0 Dbl1 Dbl0]
-    benv_bl /= norm(benv_bl, Inf)
+    @autoopt @tensor benv_sw[Dse1 Dse0 Dw1 Dw0 Dnw1 Dnw0] :=
+        cor_se(m[1, 1])[Dse1 Dse0 Ds1 Ds0] *
+        cor_sw(m[1, 0])[Dsw1 Dsw0 Ds1 Ds0] *
+        edge_w(X, hair_w(m[0, -1]))[Dnw1 Dnw0 Dw1 Dw0 Dsw1 Dsw0]
+    benv_sw /= norm(benv_sw, Inf)
     # top-right half
-    @autoopt @tensor benv_tr[Dtl1 Dtl0 Dr1 Dr0 Dbr1 Dbr0] :=
-        cor_tl(m[-1, 0])[Dt1 Dt0 Dtl1 Dtl0] *
-        cor_tr(m[-1, 1])[Dtr1 Dtr0 Dt1 Dt0] *
-        edge_r(Y, hair_r(m[0, 2]))[Dtr1 Dtr0 Dbr1 Dbr0 Dr1 Dr0]
-    benv_tr /= norm(benv_tr, Inf)
-    @tensor benv[Dl1 Dr1; Dl0 Dr0] :=
-        benv_bl[Dbr1 Dbr0 Dl1 Dl0 Dtl1 Dtl0] * benv_tr[Dtl1 Dtl0 Dr1 Dr0 Dbr1 Dbr0]
+    @autoopt @tensor benv_ne[Dnw1 Dnw0 De1 De0 Dse1 Dse0] :=
+        cor_nw(m[-1, 0])[Dn1 Dn0 Dnw1 Dnw0] *
+        cor_ne(m[-1, 1])[Dne1 Dne0 Dn1 Dn0] *
+        edge_e(Y, hair_e(m[0, 2]))[Dne1 Dne0 Dse1 Dse0 De1 De0]
+    benv_ne /= norm(benv_ne, Inf)
+    @tensor benv[Dw1 De1; Dw0 De0] :=
+        benv_sw[Dse1 Dse0 Dw1 Dw0 Dnw1 Dnw0] * benv_ne[Dnw1 Dnw0 De1 De0 Dse1 Dse0]
     return benv / norm(benv, Inf)
 end
 
@@ -83,16 +83,16 @@ function bondenv_ntu(
     row::Int, col::Int, X::T, Y::T, peps::InfiniteWeightPEPS, ::NTUEnvNNN
 ) where {T<:Union{PEPSTensor,PEPSOrth}}
     neighbors = [
-        (-1, -1, "tl"),
-        (0, -1, "l"),
-        (1, -1, "bl"),
-        (1, 0, "b"),
-        (1, 1, "b"),
-        (1, 2, "rb"),
-        (0, 2, "r"),
-        (-1, 2, "tr"),
-        (-1, 1, "t"),
-        (-1, 0, "t"),
+        (-1, -1, [NORTH, WEST]),
+        (0, -1, [WEST]),
+        (1, -1, [SOUTH, WEST]),
+        (1, 0, [SOUTH]),
+        (1, 1, [SOUTH]),
+        (1, 2, [EAST, SOUTH]),
+        (0, 2, [EAST]),
+        (-1, 2, [NORTH, EAST]),
+        (-1, 1, [NORTH]),
+        (-1, 0, [NORTH]),
     ]
     m = collect_neighbors(peps, row, col, neighbors)
     #= left half
@@ -104,10 +104,10 @@ function bondenv_ntu(
             ║           ║
         (+1 -1)═ D3 ═(+1 +0)═ -5/-6
     =#
-    vecl = enlarge_corner_tl(cor_tl(m[-1, -1]), edge_t(m[-1, 0]), edge_l(m[0, -1]), X)
+    vecl = enlarge_corner_nw(cor_nw(m[-1, -1]), edge_n(m[-1, 0]), edge_w(m[0, -1]), X)
     @tensor vecl[:] :=
-        cor_bl(m[1, -1])[D11 D10 D31 D30] *
-        edge_b(m[1, 0])[D21 D20 -5 -6 D31 D30] *
+        cor_sw(m[1, -1])[D11 D10 D31 D30] *
+        edge_s(m[1, 0])[D21 D20 -5 -6 D31 D30] *
         vecl[D11 D10 D21 D20 -1 -2 -3 -4]
     vecl /= norm(vecl, Inf)
     #= right half
@@ -119,10 +119,10 @@ function bondenv_ntu(
                     ║           ║     
         -5/-6 ══ (+1 +1)═════(+1 +2)
     =#
-    vecr = enlarge_corner_br(cor_br(m[1, 2]), edge_b(m[1, 1]), edge_r(m[0, 2]), Y)
+    vecr = enlarge_corner_se(cor_se(m[1, 2]), edge_s(m[1, 1]), edge_e(m[0, 2]), Y)
     @tensor vecr[:] :=
-        edge_t(m[-1, 1])[D11 D10 D21 D20 -1 -2] *
-        cor_tr(m[-1, 2])[D31 D30 D11 D10] *
+        edge_n(m[-1, 1])[D11 D10 D21 D20 -1 -2] *
+        cor_ne(m[-1, 2])[D31 D30 D11 D10] *
         vecr[D21 D20 D31 D30 -3 -4 -5 -6]
     vecr /= norm(vecr, Inf)
     # combine left and right part
@@ -151,31 +151,32 @@ Calculates the bond environment within "NTU-NNN+" approximation.
 function bondenv_ntu(
     row::Int, col::Int, X::T, Y::T, peps::InfiniteWeightPEPS, ::NTUEnvNNNp
 ) where {T<:Union{PEPSTensor,PEPSOrth}}
+    EMPTY = Vector{Int}()
     neighbors = [
-        (-2, -1, "trl"),
-        (-2, 0, "trl"),
-        (-2, 1, "trl"),
-        (-2, 2, "trl"),
-        (-1, -2, "tbl"),
-        (-1, -1, ""),
-        (-1, 0, ""),
-        (-1, 1, ""),
-        (-1, 2, ""),
-        (-1, 3, "trb"),
-        (0, -2, "tbl"),
-        (0, -1, ""),
-        (0, 2, ""),
-        (0, 3, "trb"),
-        (1, -2, "tbl"),
-        (1, -1, ""),
-        (1, 0, ""),
-        (1, 1, ""),
-        (1, 2, ""),
-        (1, 3, "trb"),
-        (2, -1, "rbl"),
-        (2, 0, "rbl"),
-        (2, 1, "rbl"),
-        (2, 2, "rbl"),
+        (-2, -1, [NORTH, EAST, WEST]),
+        (-2, 0, [NORTH, EAST, WEST]),
+        (-2, 1, [NORTH, EAST, WEST]),
+        (-2, 2, [NORTH, EAST, WEST]),
+        (-1, -2, [NORTH, SOUTH, WEST]),
+        (-1, -1, EMPTY),
+        (-1, 0, EMPTY),
+        (-1, 1, EMPTY),
+        (-1, 2, EMPTY),
+        (-1, 3, [NORTH, EAST, SOUTH]),
+        (0, -2, [NORTH, SOUTH, WEST]),
+        (0, -1, EMPTY),
+        (0, 2, EMPTY),
+        (0, 3, [NORTH, EAST, SOUTH]),
+        (1, -2, [NORTH, SOUTH, WEST]),
+        (1, -1, EMPTY),
+        (1, 0, EMPTY),
+        (1, 1, EMPTY),
+        (1, 2, EMPTY),
+        (1, 3, [NORTH, EAST, SOUTH]),
+        (2, -1, [EAST, SOUTH, WEST]),
+        (2, 0, [EAST, SOUTH, WEST]),
+        (2, 1, [EAST, SOUTH, WEST]),
+        (2, 2, [EAST, SOUTH, WEST]),
     ]
     m = collect_neighbors(peps, row, col, neighbors)
     #= left half
@@ -191,15 +192,15 @@ function bondenv_ntu(
                     ║           ║
                 (+2 -1)       (+2 +0)
     =#
-    vecl = enlarge_corner_tl(
-        cor_tl(m[-1, -1], hair_t(m[-2, -1]), hair_l(m[-1, -2])),
-        edge_t(m[-1, 0], hair_t(m[-2, 0])),
-        edge_l(m[0, -1], hair_l(m[0, -2])),
+    vecl = enlarge_corner_nw(
+        cor_nw(m[-1, -1], hair_n(m[-2, -1]), hair_w(m[-1, -2])),
+        edge_n(m[-1, 0], hair_n(m[-2, 0])),
+        edge_w(m[0, -1], hair_w(m[0, -2])),
         X,
     )
     @tensor vecl[:] :=
-        cor_bl(m[1, -1], hair_b(m[2, -1]), hair_l(m[1, -2]))[D11 D10 D31 D30] *
-        edge_b(m[1, 0], hair_b(m[2, 0]))[D21 D20 -5 -6 D31 D30] *
+        cor_sw(m[1, -1], hair_s(m[2, -1]), hair_w(m[1, -2]))[D11 D10 D31 D30] *
+        edge_s(m[1, 0], hair_s(m[2, 0]))[D21 D20 -5 -6 D31 D30] *
         vecl[D11 D10 D21 D20 -1 -2 -3 -4]
     vecl /= norm(vecl, Inf)
     #= 
@@ -215,15 +216,15 @@ function bondenv_ntu(
                     ║           ║
                 (+2 +1)      (+2 +2)
     =#
-    vecr = enlarge_corner_br(
-        cor_br(m[1, 2], hair_r(m[1, 3]), hair_b(m[2, 2])),
-        edge_b(m[1, 1], hair_b(m[2, 1])),
-        edge_r(m[0, 2], hair_r(m[0, 3])),
+    vecr = enlarge_corner_se(
+        cor_se(m[1, 2], hair_e(m[1, 3]), hair_s(m[2, 2])),
+        edge_s(m[1, 1], hair_s(m[2, 1])),
+        edge_e(m[0, 2], hair_e(m[0, 3])),
         Y,
     )
     @tensor vecr[:] :=
-        edge_t(m[-1, 1], hair_t(m[-2, 1]))[D11 D10 D21 D20 -1 -2] *
-        cor_tr(m[-1, 2], hair_t(m[-2, 2]), hair_r(m[-1, 3]))[D31 D30 D11 D10] *
+        edge_n(m[-1, 1], hair_n(m[-2, 1]))[D11 D10 D21 D20 -1 -2] *
+        cor_ne(m[-1, 2], hair_n(m[-2, 2]), hair_e(m[-1, 3]))[D31 D30 D11 D10] *
         vecr[D21 D20 D31 D30 -3 -4 -5 -6]
     vecr /= norm(vecr, Inf)
     # combine left and right part
