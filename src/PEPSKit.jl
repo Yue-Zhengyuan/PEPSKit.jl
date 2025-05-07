@@ -10,7 +10,6 @@ using LoggingExtras
 import MPSKit: leading_boundary, loginit!, logiter!, logfinish!, logcancel!, physicalspace
 using MPSKitModels
 using FiniteDifferences
-using Accessors: @set
 using OhMyThreads: tmap
 using DocStringExtensions
 
@@ -46,7 +45,9 @@ include("algorithms/contractions/ctmrg_contractions.jl")
 include("algorithms/contractions/localoperator.jl")
 include("algorithms/contractions/vumps_contractions.jl")
 include("algorithms/contractions/bondenv/benv_tools.jl")
+include("algorithms/contractions/bondenv/gaugefix.jl")
 include("algorithms/contractions/bondenv/als_solve.jl")
+include("algorithms/contractions/bondenv/benv_ntu.jl")
 
 include("algorithms/ctmrg/sparse_environments.jl")
 include("algorithms/ctmrg/ctmrg.jl")
@@ -85,8 +86,8 @@ export fixedpoint
 
 export absorb_weight
 export ALSTruncation, FullEnvTruncation
-export su_iter, simpleupdate, SimpleUpdate
 export NTUEnvNN, NTUEnvNNN, NTUEnvNNNp
+export su_iter, simpleupdate, SimpleUpdate
 export ntu_iter, ntupdate, NTUpdate
 
 export InfiniteSquareNetwork

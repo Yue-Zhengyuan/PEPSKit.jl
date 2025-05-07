@@ -8,7 +8,8 @@ Each NTU run stops when energy starts to increase.
     # maximum weight difference for convergence
     tol::Float64
     # algorithm to construct bond environment (metric)
-    bondenv_alg::BondEnvAlgorithm
+    bondenv_alg::NTUEnvAlgorithm
+    fixgauge::Bool = true
     # bond truncation after applying time evolution gate
     opt_alg::Union{ALSTruncation,FullEnvTruncation}
     # monitor energy every `ctm_int` steps
@@ -20,7 +21,7 @@ end
 """
 Neighborhood tensor update for the bond between sites `[row, col]` and `[row, col+1]`.
 """
-function _ntu_bondx!(
+function _ntu_xbond!(
     row::Int,
     col::Int,
     gate::AbstractTensorMap{T,S,2,2},
@@ -30,70 +31,55 @@ function _ntu_bondx!(
     Nr, Nc = size(peps)
     @assert 1 <= row <= Nr && 1 <= col <= Nc
     cp1 = _next(col, Nc)
-    # TODO: relax dual requirement on the bonds
     A, B = peps.vertices[row, col], peps.vertices[row, cp1]
-    @assert !isdual(domain(A)[2])
-    A = _absorb_weight(A, row, col, "", peps.weights)
-    B = _absorb_weight(B, row, cp1, "", peps.weights)
-    #= QR and LQ decomposition
-
-        2   1               1             2
-        | ↗                 |            ↗
-    5 - A ← 3   ====>   4 - X ← 2   1 ← aR ← 3
-        |                   |
-        4                   3
-    =#
-    X, aR = leftorth(A, ((2, 4, 5), (1, 3)); alg=QRpos())
-    X, aR = permute(X, (1, 4, 2, 3)), permute(aR, (1, 2, 3))
-    #=
-        2   1                 2         2
-        | ↗                 ↗           |
-    5 ← B - 3   ====>  1 ← bL → 3   1 → Y - 3
-        |                               |
-        4                               4
-    =#
-    Y, bL = leftorth(B, ((2, 3, 4), (1, 5)); alg=QRpos())
-    bL, Y = permute(bL, (3, 2, 1)), permute(Y, (1, 2, 3, 4))
-    env = bondenv_ntu(row, col, X, Y, peps, alg.bondenv_alg)
-    @assert [isdual(space(env, ax)) for ax in 1:4] == [0, 0, 1, 1]
-    #= apply gate
-
-            -2         -3
-            ↑           ↑
-            |----gate---|
-            ↑           ↑
-            1           2
-            ↑           ↑
-        -1← aR -← 3 -← bL ← -4
-    =#
-    @tensor aR2bL2[-1 -2; -3 -4] := gate[-2 -3; 1 2] * aR[-1 1 3] * bL[3 2 -4]
-    # initialize aR, bL using un-truncated SVD
-    aR, s, bL, ϵ = tsvd(aR2bL2; trunc=truncerr(1e-15))
-    aR, bL = absorb_s(aR, s, bL)
-    aR, bL = permute(aR, (1, 2, 3)), permute(bL, (1, 2, 3))
-    # optimize aR, bL
-    aR, s, bL, (cost, fid) = bond_optimize(env, aR, bL, alg.opt_alg)
-    #= update and normalize peps, ms
-
-            -2        -1               -1     -2
-            |        ↗                ↗       |
-        -5- X ← 1 ← aR ← -3     -5 ← bL → 1 → Y - -3
-            |                                 |
-            -4                                -4
-    =#
-    @tensor A[-1; -2 -3 -4 -5] := X[-2, 1, -4, -5] * aR[1, -1, -3]
-    @tensor B[-1; -2 -3 -4 -5] := bL[-5, -1, 1] * Y[-2, -3, -4, 1]
+    _alltrue = ntuple(Returns(true), 4)
+    A = _absorb_weights(A, peps.weights, row, col, Tuple(1:4), _alltrue, false)
+    B = _absorb_weights(B, peps.weights, row, cp1, Tuple(1:4), _alltrue, false)
+    X, a, b, Y = _qr_bond(A, B)
+    benv = bondenv_ntu(row, col, X, Y, peps, alg.bondenv_alg)
+    if alg.fixgauge
+        Z = positive_approx(benv)
+        Z, a, b, (Linv, Rinv) = fixgauge_benv(Z, a, b)
+        X, Y = _fixgauge_benvXY(X, Y, Linv, Rinv)
+        benv = Z' * Z
+    end
+    # apply gate
+    a, s, b, = _apply_gate(a, b, gate, truncerr(1e-15))
+    a, b = absorb_s(a, s, b)
+    # optimize a, b
+    a, s, b, info = bond_truncate(a, b, benv, alg.opt_alg)
+    A, B = _qr_bond_undo(X, a, b, Y)
     # remove bond weights
-    for ax in (2, 4, 5)
-        A = absorb_weight(A, row, col, ax, peps.weights; sqrtwt=true, invwt=true)
-    end
-    for ax in (2, 3, 4)
-        B = absorb_weight(B, row, cp1, ax, peps.weights; sqrtwt=true, invwt=true)
-    end
-    peps.vertices[row, col] = A / norm(A, Inf)
-    peps.vertices[row, cp1] = B / norm(B, Inf)
+    _alltrue = _alltrue[1:3]
+    A = _absorb_weights(A, peps.weights, row, col, (NORTH, SOUTH, WEST), _alltrue, true)
+    B = _absorb_weights(B, peps.weights, row, cp1, (NORTH, SOUTH, EAST), _alltrue, true)
+    peps.vertices[row, col] = A * (100.0 / norm(A, Inf))
+    peps.vertices[row, cp1] = B * (100.0 / norm(B, Inf))
     peps.weights[1, row, col] = s / norm(s, Inf)
-    return cost, fid
+    return info
+end
+
+function _ntu_xbonds!(
+    gate::LocalOperator, peps::InfiniteWeightPEPS, alg::NTUpdate; bipartite::Bool
+)
+    if bipartite
+        @assert size(peps) == (2, 2)
+        for r in 1:2
+            rp1 = _next(r, 2)
+            term = get_gateterm(gate, (CartesianIndex(r, 1), CartesianIndex(r, 2)))
+            info = _ntu_xbond!(r, 1, term, peps, alg)
+            peps.vertices[rp1, 2] = deepcopy(peps.vertices[r, 1])
+            peps.vertices[rp1, 1] = deepcopy(peps.vertices[r, 2])
+            peps.weights[1, rp1, 2] = deepcopy(peps.weights[1, r, 1])
+        end
+    else
+        for site in CartesianIndices(peps.vertices)
+            r, c = Tuple(site)
+            term = get_gateterm(gate, (CartesianIndex(r, c), CartesianIndex(r, c + 1)))
+            info = _ntu_xbond!(r, c, term, peps, alg)
+        end
+    end
+    return nothing
 end
 
 """
@@ -113,43 +99,16 @@ function ntu_iter(
     if bipartite
         @assert Nr == Nc == 2
     end
-    # TODO: make algorithm independent on the choice of dual in the network
-    for (r, c) in Iterators.product(1:Nr, 1:Nc)
-        @assert [isdual(space(peps.vertices[r, c], ax)) for ax in 1:5] == [0, 1, 1, 0, 0]
-        @assert [isdual(space(peps.weights[1, r, c], ax)) for ax in 1:2] == [0, 1]
-        @assert [isdual(space(peps.weights[2, r, c], ax)) for ax in 1:2] == [0, 1]
-    end
     peps2 = deepcopy(peps)
-    gate_mirrored = mirror_antidiag(gate)
-    for direction in 1:2
-        if direction == 2
-            peps2 = mirror_antidiag(peps2)
-        end
-        if bipartite
-            for r in 1:2
-                rp1 = _next(r, 2)
-                term = get_gateterm(
-                    direction == 1 ? gate : gate_mirrored,
-                    (CartesianIndex(r, 1), CartesianIndex(r, 2)),
-                )
-                ϵ = _ntu_bondx!(r, 1, term, peps2, alg)
-                peps2.vertices[rp1, 2] = deepcopy(peps2.vertices[r, 1])
-                peps2.vertices[rp1, 1] = deepcopy(peps2.vertices[r, 2])
-                peps2.weights[1, rp1, 2] = deepcopy(peps2.weights[1, r, 1])
-            end
-        else
-            for site in CartesianIndices(peps2.vertices)
-                r, c = Tuple(site)
-                term = get_gateterm(
-                    direction == 1 ? gate : gate_mirrored,
-                    (CartesianIndex(r, c), CartesianIndex(r, c + 1)),
-                )
-                ϵ = _ntu_bondx!(r, c, term, peps2, alg)
-            end
-        end
-        if direction == 2
-            peps2 = mirror_antidiag(peps2)
-        end
+    gate2 = deepcopy(gate)
+    for i in 1:4
+        _ntu_xbonds!(gate2, peps2, alg; bipartite)
+        peps2 = rotl90(peps2)
+        gate2 = rotl90(gate2)
+    end
+    # for fermions, undo the twists caused by repeated flipping
+    for i in CartesianIndices(peps2.vertices)
+        twist!(peps2.vertices[i], Tuple(2:5))
     end
     return peps2
 end
@@ -163,7 +122,7 @@ as well as tensors and x/y weights which are the same across the diagonals, i.e.
 """
 function ntupdate(
     peps::InfiniteWeightPEPS,
-    envs::CTMRGEnv,
+    env::CTMRGEnv,
     ham::LocalOperator,
     alg::NTUpdate,
     ctm_alg::CTMRGAlgorithm;
@@ -181,9 +140,8 @@ function ntupdate(
         "speed",
         "meas(s)"
     )
-    gate = get_gate(alg.dt, ham)
-    wts0, peps0, envs0 = deepcopy(peps.weights), deepcopy(envs), deepcopy(envs)
-    energy0, energy, ediff, wtdiff = Inf, 0.0, 0.0, 1.0
+    gate = get_expham(alg.dt, ham)
+    wts0, peps0, env0 = deepcopy(peps.weights), deepcopy(env), deepcopy(env)
     energy0, energy, ediff, wtdiff = Inf, 0.0, 0.0, 1.0
     for count in 1:(alg.maxiter)
         time0 = time()
@@ -195,20 +153,17 @@ function ntupdate(
         time1 = time()
         if count == 1 || count % alg.ctm_int == 0 || converge || cancel
             # monitor change of energy
-            # monitor change of energy
             meast0 = time()
             peps_ = InfinitePEPS(peps)
-            envs = leading_boundary(envs, peps_, alg.ctm_alg)
-            energy = costfun(peps_, envs, ham) / (Nr * Nc)
-            ediff = energy - energy0
-            energy = costfun(peps_, envs, ham) / (Nr * Nc)
+            normalize!.(peps_.A, Inf)
+            env, = leading_boundary(env, peps_, alg.ctm_alg)
+            energy = cost_function(peps_, env, ham) / (Nr * Nc)
             ediff = energy - energy0
             meast1 = time()
             message = @sprintf(
                 "%-4d %7.0e%10.5f%12.3e%11.3e  %.3f/%.3f\n",
                 count,
                 alg.dt,
-                energy,
                 energy,
                 ediff,
                 wtdiff,
@@ -219,24 +174,23 @@ function ntupdate(
             if ediff > 0
                 @info "Energy starts to increase. Abort evolution.\n"
                 # restore last checkpoint
-                peps, envs, energy = deepcopy(peps0), deepcopy(envs0), energy0
+                peps, env, energy = deepcopy(peps0), deepcopy(env0), energy0
                 break
             end
-            peps0, envs0, energy0 = deepcopy(peps), deepcopy(envs), energy
+            peps0, env0, energy0 = deepcopy(peps), deepcopy(env), energy
             converge && break
         end
     end
     # reconverge the environment tensors
     for io in (stdout, stderr)
-        @printf(io, "Reconverging final envs ... \n")
+        @printf(io, "Reconverging final env ... \n")
     end
     peps_ = InfinitePEPS(peps)
-    envs = leading_boundary(envs, peps_, ctm_alg)
-    energy = costfun(peps_, envs, ham) / (Nr * Nc)
-    energy = costfun(peps_, envs, ham) / (Nr * Nc)
+    normalize!.(peps_.A, Inf)
+    env, = leading_boundary(env, peps_, ctm_alg)
+    energy = cost_function(peps_, env, ham) / (Nr * Nc)
     time_end = time()
     @printf("Evolution time: %.3f s\n\n", time_end - time_start)
     print(stderr, "\n----------\n\n")
-    return peps, envs, (; energy, ediff, wtdiff)
-    return peps, envs, (; energy, ediff, wtdiff)
+    return peps, env, (; energy, ediff, wtdiff)
 end
