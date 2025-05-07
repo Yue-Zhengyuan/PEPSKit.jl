@@ -19,9 +19,13 @@ virtuallabel(args...) = tensorlabel(:D, args...)
 physicallabel(args...) = tensorlabel(:d, args...)
 
 """
-    contract_local_operator(inds, O, peps, env)
+$(SIGNATURES)
 
 Contract a local operator `O` on the PEPS `peps` at the indices `inds` using the environment `env`.
+
+This works by generating the appropriate contraction on a rectangular patch with its corners
+specified by `inds`. The `peps` is contracted with `O` from above and below, and the PEPS-operator
+sandwich is surrounded with the appropriate environment tensors.
 """
 function contract_local_operator(
     inds::NTuple{N,CartesianIndex{2}},
@@ -214,9 +218,13 @@ end
 end
 
 """
-    contract_local_norm(inds, peps, env)
+$(SIGNATURES)
 
 Contract a local norm of the PEPS `peps` around indices `inds`.
+
+This works analogously to [`contract_local_operator`](@ref) by generating the contraction
+on a rectangular patch based on `inds` but replacing the operator with an identity such
+that the PEPS norm is computed. (Note that this is not the physical norm of the state.)
 """
 function contract_local_norm(
     inds::NTuple{N,CartesianIndex{2}}, ket::InfinitePEPS, bra::InfinitePEPS, env::CTMRGEnv
@@ -261,39 +269,4 @@ end
         @autoopt @tensor opt = $multiplication_ex
     end
     return macroexpand(@__MODULE__, returnex)
-end
-
-# Partition function contractions
-
-"""
-    contract_local_tensor(inds, O, env)
-
-Contract a local tensor `O` inserted into a partition function `pf` at position `inds`,
-using the environment `env`.
-"""
-function contract_local_tensor(
-    inds::Tuple{Int,Int},
-    O::AbstractTensorMap{T,S,2,2},
-    env::CTMRGEnv{C,<:CTMRG_PF_EdgeTensor},
-) where {T,S,C}
-    r, c = inds
-    return @autoopt @tensor env.corners[NORTHWEST, _prev(r, end), _prev(c, end)][
-            χ_WNW
-            χ_NNW
-        ] *
-        env.edges[NORTH, _prev(r, end), c][χ_NNW D_N; χ_NNE] *
-        env.corners[NORTHEAST, _prev(r, end), _next(c, end)][χ_NNE; χ_ENE] *
-        env.edges[EAST, r, _next(c, end)][χ_ENE D_E; χ_ESE] *
-        env.corners[SOUTHEAST, _next(r, end), _next(c, end)][χ_ESE; χ_SSE] *
-        env.edges[SOUTH, _next(r, end), c][χ_SSE D_S; χ_SSW] *
-        env.corners[SOUTHWEST, _next(r, end), _prev(c, end)][χ_SSW; χ_WSW] *
-        env.edges[WEST, r, _prev(c, end)][χ_WSW D_W; χ_WNW] *
-        O[D_W D_S; D_N D_E]
-end
-function contract_local_tensor(
-    inds::CartesianIndex{2},
-    O::AbstractTensorMap{T,S,2,2},
-    env::CTMRGEnv{C,<:CTMRG_PF_EdgeTensor},
-) where {T,S,C}
-    return contract_local_tensor(Tuple(inds), O, env)
 end

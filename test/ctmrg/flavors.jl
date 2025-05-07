@@ -7,10 +7,8 @@ using PEPSKit
 # initialize parameters
 χbond = 2
 χenv = 16
-ctm_alg_sequential = SequentialCTMRG()
-ctm_alg_simultaneous = SimultaneousCTMRG()
 unitcells = [(1, 1), (3, 4)]
-projector_algs = [HalfInfiniteProjector, FullInfiniteProjector]
+projector_algs = [:halfinfinite, :fullinfinite]
 
 @testset "$(unitcell) unit cell with $projector_alg" for (unitcell, projector_alg) in
                                                          Iterators.product(
@@ -19,11 +17,11 @@ projector_algs = [HalfInfiniteProjector, FullInfiniteProjector]
     # compute environments
     Random.seed!(32350283290358)
     psi = InfinitePEPS(2, χbond; unitcell)
-    env_sequential = leading_boundary(
-        CTMRGEnv(psi, ComplexSpace(χenv)), psi, ctm_alg_sequential
+    env_sequential, = leading_boundary(
+        CTMRGEnv(psi, ComplexSpace(χenv)), psi; alg=:sequential, projector_alg
     )
-    env_simultaneous = leading_boundary(
-        CTMRGEnv(psi, ComplexSpace(χenv)), psi, ctm_alg_simultaneous
+    env_simultaneous, = leading_boundary(
+        CTMRGEnv(psi, ComplexSpace(χenv)), psi; alg=:simultaneous, projector_alg
     )
 
     # compare norms
@@ -50,25 +48,23 @@ projector_algs = [HalfInfiniteProjector, FullInfiniteProjector]
 
     # compare Heisenberg energies
     H = heisenberg_XYZ(InfiniteSquare(unitcell...))
-    E_sequential = costfun(psi, env_sequential, H)
-    E_simultaneous = costfun(psi, env_simultaneous, H)
+    E_sequential = cost_function(psi, env_sequential, H)
+    E_simultaneous = cost_function(psi, env_simultaneous, H)
     @test E_sequential ≈ E_simultaneous rtol = 1e-3
 end
 
 # test fixedspace actually fixes space
-@testset "Fixedspace truncation using $ctmrg_alg and $projector_alg" for (
-    ctmrg_alg, projector_alg
-) in Iterators.product(
-    [SequentialCTMRG, SimultaneousCTMRG], projector_algs
+@testset "Fixedspace truncation using $alg and $projector_alg" for (alg, projector_alg) in
+                                                                   Iterators.product(
+    [:sequential, :simultaneous], projector_algs
 )
-    ctm_alg = ctmrg_alg(;
-        tol=1e-6, maxiter=1, verbosity=0, trscheme=FixedSpaceTruncation(), projector_alg
-    )
     Ds = fill(2, 3, 3)
     χs = [16 17 18; 15 20 21; 14 19 22]
     psi = InfinitePEPS(Ds, Ds, Ds)
     env = CTMRGEnv(psi, rand(10:20, 3, 3), rand(10:20, 3, 3))
-    env2 = leading_boundary(env, psi, ctm_alg)
+    env2, = leading_boundary(
+        env, psi; alg, maxiter=1, trscheme=FixedSpaceTruncation(), projector_alg
+    )
 
     # check that the space is fixed
     @test all(space.(env.corners) .== space.(env2.corners))

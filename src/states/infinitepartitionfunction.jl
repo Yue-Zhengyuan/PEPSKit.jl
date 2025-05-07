@@ -1,19 +1,24 @@
 """
     struct InfinitePartitionFunction{T<:PartitionFunctionTensor}
 
-Represents an infinite projected entangled-pair state on a 2D square lattice.
+Represents an infinite partition function on a 2D square lattice.
+
+## Fields
+
+$(TYPEDFIELDS)
 """
-struct InfinitePartitionFunction{T<:PartitionFunctionTensor} <: InfiniteSquareNetwork{T,2}
+struct InfinitePartitionFunction{T<:PartitionFunctionTensor}
     A::Matrix{T}
     function InfinitePartitionFunction{T}(A::Matrix{T}) where {T<:PartitionFunctionTensor}
         return new{T}(A)
     end
-    function InfinitePartitionFunction(A::Array{T,2}) where {T<:PartitionFunctionTensor}
+    function InfinitePartitionFunction(A::Matrix{T}) where {T<:PartitionFunctionTensor}
         for (d, w) in Tuple.(CartesianIndices(A))
-            space(A[d, w], 1) == space(A[_prev(d, end), w], 4)' || throw(
-                SpaceMismatch("North virtual space at site $((d, w)) does not match.")
-            )
-            space(A[d, w], 2) == space(A[d, _next(w, end)], 3)' ||
+            north_virtualspace(A[d, w]) == south_virtualspace(A[_prev(d, end), w])' ||
+                throw(
+                    SpaceMismatch("North virtual space at site $((d, w)) does not match.")
+                )
+            east_virtualspace(A[d, w]) == west_virtualspace(A[d, _next(w, end)])' ||
                 throw(SpaceMismatch("East virtual space at site $((d, w)) does not match."))
             dim(space(A[d, w])) > 0 || @warn "no fusion channels at site ($d, $w)"
         end
@@ -24,6 +29,7 @@ end
 const InfinitePF{T} = InfinitePartitionFunction{T}
 
 ## Constructors
+
 """
     InfinitePartitionFunction(A::AbstractMatrix{T})
 
@@ -36,7 +42,7 @@ end
 
 """
     InfinitePartitionFunction(
-        f=randn, T=ComplexF64, Pspaces::A, Nspaces::A, [Espaces::A]
+        [f=randn, T=ComplexF64,] Pspaces::A, Nspaces::A, [Espaces::A]
     ) where {A<:AbstractMatrix{<:Union{Int,ElementarySpace}}}
 
 Create an `InfinitePartitionFunction` by specifying the physical, north virtual and east virtual spaces
@@ -45,12 +51,12 @@ specified as either an `Int` or an `ElementarySpace`.
 """
 function InfinitePartitionFunction(
     Nspaces::A, Espaces::A
-) where {A<:AbstractMatrix{<:Union{Int,ElementarySpace}}}
+) where {A<:AbstractMatrix{<:ElementarySpaceLike}}
     return InfinitePartitionFunction(randn, ComplexF64, Nspaces, Espaces)
 end
 function InfinitePartitionFunction(
     f, T, Nspaces::M, Espaces::M=Nspaces
-) where {M<:AbstractMatrix{<:Union{Int,ElementarySpace}}}
+) where {M<:AbstractMatrix{<:ElementarySpaceLike}}
     size(Nspaces) == size(Espaces) ||
         throw(ArgumentError("Input spaces should have equal sizes."))
 
@@ -91,63 +97,95 @@ function InfinitePartitionFunction(
 end
 
 """
-    InfinitePartitionFunction(f=randn, T=ComplexF64, Pspace, Nspace, [Espace]; unitcell=(1,1))
+    InfinitePartitionFunction(
+        [f=randn, T=ComplexF64,] Pspace::S, Nspace::S, [Espace::S]; unitcell=(1,1)
+    ) where {S<:ElementarySpaceLike}
 
 Create an InfinitePartitionFunction by specifying its physical, north and east spaces and unit cell.
 Spaces can be specified either via `Int` or via `ElementarySpace`.
 """
 function InfinitePartitionFunction(
     Nspace::S, Espace::S=Nspace; unitcell::Tuple{Int,Int}=(1, 1)
-) where {S<:Union{ElementarySpace,Int}}
+) where {S<:ElementarySpaceLike}
     return InfinitePartitionFunction(
         randn, ComplexF64, fill(Nspace, unitcell), fill(Espace, unitcell)
     )
 end
 function InfinitePartitionFunction(
     f, T, Nspace::S, Espace::S=Nspace; unitcell::Tuple{Int,Int}=(1, 1)
-) where {S<:Union{ElementarySpace,Int}}
+) where {S<:ElementarySpaceLike}
     return InfinitePartitionFunction(f, T, fill(Nspace, unitcell), fill(Espace, unitcell))
 end
 
+## Unit cell interface
+
 unitcell(t::InfinitePartitionFunction) = t.A
-TensorKit.space(t::InfinitePartitionFunction, i, j) = space(t[i, j], 1)
+Base.size(A::InfinitePartitionFunction, args...) = size(unitcell(A), args...)
+Base.length(A::InfinitePartitionFunction) = length(unitcell(A))
+Base.eltype(::Type{InfinitePartitionFunction{T}}) where {T} = T
+Base.eltype(A::InfinitePartitionFunction) = eltype(typeof(A))
 
-# Chainrules
-function ChainRulesCore.rrule(
-    ::typeof(Base.getindex), state::InfinitePartitionFunction, row::Int, col::Int
+Base.copy(A::InfinitePartitionFunction) = InfinitePartitionFunction(copy(unitcell(A)))
+function Base.similar(
+    A::InfinitePartitionFunction, T::Type{TorA}=scalartype(A)
+) where {TorA}
+    return InfinitePartitionFunction(map(t -> similar(t, T), unitcell(A)))
+end
+function Base.repeat(A::InfinitePartitionFunction, counts...)
+    return InfinitePartitionFunction(repeat(unitcell(A), counts...))
+end
+
+Base.getindex(A::InfinitePartitionFunction, args...) = Base.getindex(unitcell(A), args...)
+function Base.setindex!(A::InfinitePartitionFunction, args...)
+    return (Base.setindex!(unitcell(A), args...); A)
+end
+Base.axes(A::InfinitePartitionFunction, args...) = axes(unitcell(A), args...)
+eachcoordinate(A::InfinitePartitionFunction) = collect(Iterators.product(axes(A)...))
+function eachcoordinate(A::InfinitePartitionFunction, dirs)
+    return collect(Iterators.product(dirs, axes(A, 1), axes(A, 2)))
+end
+
+## Spaces
+
+virtualspace(n::InfinitePartitionFunction, r::Int, c::Int, dir) = virtualspace(n[r, c], dir)
+
+## InfiniteSquareNetwork interface
+
+function InfiniteSquareNetwork(state::InfinitePartitionFunction)
+    return InfiniteSquareNetwork(unitcell(state))
+end
+
+## Vector interface
+
+function VectorInterface.scalartype(::Type{NT}) where {NT<:InfinitePartitionFunction}
+    return scalartype(eltype(NT))
+end
+function VectorInterface.zerovector(A::InfinitePartitionFunction)
+    return InfinitePartitionFunction(zerovector(unitcell(A)))
+end
+
+## (Approximate) equality
+function Base.:(==)(A₁::InfinitePartitionFunction, A₂::InfinitePartitionFunction)
+    return all(zip(unitcell(A₁), unitcell(A₂))) do (p₁, p₂)
+        return p₁ == p₂
+    end
+end
+function Base.isapprox(
+    A₁::InfinitePartitionFunction, A₂::InfinitePartitionFunction; kwargs...
 )
-    PartitionFunctionTensor = state[row, col]
-
-    function getindex_pullback(ΔPartitionFunction)
-        Δstate = zerovector(state)
-        Δstate[row, col] = ΔPartitionFunction
-        return NoTangent(), Δstate, NoTangent(), NoTangent()
+    return all(zip(unitcell(A₁), unitcell(A₂))) do (p₁, p₂)
+        return isapprox(p₁, p₂; kwargs...)
     end
-    return PartitionFunctionTensor, getindex_pullback
 end
 
-function ChainRulesCore.rrule(
-    ::Type{<:InfinitePartitionFunction}, A::Matrix{T}
-) where {T<:PartitionFunctionTensor}
-    peps = InfinitePartitionFunction(A)
-    function InfinitePartitionFunction_pullback(Δpeps)
-        return NoTangent(), Δpeps.A
-    end
-    return peps, InfinitePartitionFunction_pullback
-end
+## Rotations
 
-function ChainRulesCore.rrule(::typeof(rotl90), peps::InfinitePartitionFunction)
-    peps′ = rotl90(peps)
-    function rotl90_pullback(Δpeps)
-        return NoTangent(), rotr90(Δpeps)
-    end
-    return peps′, rotl90_pullback
+function Base.rotl90(A::InfinitePartitionFunction)
+    return InfinitePartitionFunction(rotl90(rotl90.(unitcell(A))))
 end
-
-function ChainRulesCore.rrule(::typeof(rotr90), peps::InfinitePartitionFunction)
-    peps′ = rotr90(peps)
-    function rotr90_pullback(Δpeps)
-        return NoTangent(), rotl90(Δpeps)
-    end
-    return peps′, rotr90_pullback
+function Base.rotr90(A::InfinitePartitionFunction)
+    return InfinitePartitionFunction(rotr90(rotr90.(unitcell(A))))
+end
+function Base.rot180(A::InfinitePartitionFunction)
+    return InfinitePartitionFunction(rot180(rot180.(unitcell(A))))
 end

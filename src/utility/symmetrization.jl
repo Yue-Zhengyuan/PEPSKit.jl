@@ -1,28 +1,28 @@
 abstract type SymmetrizationStyle end
 
 """
-    struct ReflectDepth <: SymmetrizationStyle
+$(TYPEDEF)
 
 Reflection symmmetrization along the horizontal axis, such that north and south are mirrored.
 """
 struct ReflectDepth <: SymmetrizationStyle end
 
 """
-    struct ReflectWidth <: SymmetrizationStyle
+$(TYPEDEF)
 
 Reflection symmmetrization along the vertical axis, such that east and west are mirrored.
 """
 struct ReflectWidth <: SymmetrizationStyle end
 
 """
-    struct Rotate <: SymmetrizationStyle
+$(TYPEDEF)
 
 Rotation symmmetrization leaving the object invariant under π/2 rotations.
 """
 struct Rotate <: SymmetrizationStyle end
 
 """
-    struct RotateReflect <: SymmetrizationStyle
+$(TYPEDEF)
 
 Full reflection and rotation symmmetrization, such that reflection along the horizontal and
 vertical axis as well as π/2 rotations leave the object invariant.
@@ -215,24 +215,4 @@ function symmetrize!(peps::InfinitePEPS, symm::RotateReflect)
         end
     end
     return peps
-end
-
-"""
-    symmetrize_retract_and_finalize!(symm::SymmetrizationStyle)
-
-Return the `retract` and `finalize!` function for symmetrizing the `peps` and `grad` tensors.
-"""
-function symmetrize_retract_and_finalize!(symm::SymmetrizationStyle)
-    finf = function symmetrize_finalize!((peps, envs), E, grad, _)
-        grad_symm = symmetrize!(grad, symm)
-        return (peps, envs), E, grad_symm
-    end
-    retf = function symmetrize_retract((peps, envs), η, α)
-        peps_symm = deepcopy(peps)
-        peps_symm.A .+= η.A .* α
-        e = deepcopy(envs)
-        symmetrize!(peps_symm, symm)
-        return (peps_symm, e), η
-    end
-    return retf, finf
 end
