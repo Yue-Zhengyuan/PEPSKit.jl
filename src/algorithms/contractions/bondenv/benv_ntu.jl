@@ -20,12 +20,14 @@ Construct the "NTU-NN" bond environment.
             (+1 +0)══(+1 +1)
 ```
 """
-struct NTUEnvNN <: NTUEnvAlgorithm end
+@kwdef struct NTUEnvNN <: NTUEnvAlgorithm
+    add_bwt::Bool = true
+end
 """
 Calculate the bond environment within "NTU-NN" approximation.
 """
 function bondenv_ntu(
-    row::Int, col::Int, X::T, Y::T, peps::InfiniteWeightPEPS, ::NTUEnvNN
+    row::Int, col::Int, X::T, Y::T, peps::InfiniteWeightPEPS, alg::NTUEnvNN
 ) where {T<:Union{PEPSTensor,PEPSOrth}}
     neighbors = [
         (-1, 0, [NORTH, WEST]),
@@ -35,7 +37,7 @@ function bondenv_ntu(
         (0, 2, [NORTH, EAST, SOUTH]),
         (-1, 1, [NORTH, EAST]),
     ]
-    m = collect_neighbors(peps, row, col, neighbors)
+    m = collect_neighbors(peps, row, col, neighbors, alg.add_bwt)
     #= contraction indices
 
                 (-1 +0) ══ Dn ══ (-1 +1)
@@ -75,12 +77,14 @@ Construct the "NTU-NNN" bond environment.
     (+1 -1)=(+1 +0)══(+1 +1)=(+1 +2)
 ```
 """
-struct NTUEnvNNN <: NTUEnvAlgorithm end
+@kwdef struct NTUEnvNNN <: NTUEnvAlgorithm
+    add_bwt::Bool = true
+end
 """
 Calculates the bond environment within "NTU-NNN" approximation.
 """
 function bondenv_ntu(
-    row::Int, col::Int, X::T, Y::T, peps::InfiniteWeightPEPS, ::NTUEnvNNN
+    row::Int, col::Int, X::T, Y::T, peps::InfiniteWeightPEPS, alg::NTUEnvNNN
 ) where {T<:Union{PEPSTensor,PEPSOrth}}
     neighbors = [
         (-1, -1, [NORTH, WEST]),
@@ -94,7 +98,7 @@ function bondenv_ntu(
         (-1, 1, [NORTH]),
         (-1, 0, [NORTH]),
     ]
-    m = collect_neighbors(peps, row, col, neighbors)
+    m = collect_neighbors(peps, row, col, neighbors, alg.add_bwt)
     #= left half
         (-1 -1)══════(-1 +0)═ -1/-2
             ║           ║
@@ -144,12 +148,14 @@ Construct the "NTU-NNN+" bond environment.
             (+2 -1) (+2 +0)  (+2 +1) (+2 +2)
 ```
 """
-struct NTUEnvNNNp <: NTUEnvAlgorithm end
+@kwdef struct NTUEnvNNNp <: NTUEnvAlgorithm
+    add_bwt::Bool = true
+end
 """
 Calculates the bond environment within "NTU-NNN+" approximation.
 """
 function bondenv_ntu(
-    row::Int, col::Int, X::T, Y::T, peps::InfiniteWeightPEPS, ::NTUEnvNNNp
+    row::Int, col::Int, X::T, Y::T, peps::InfiniteWeightPEPS, alg::NTUEnvNNNp
 ) where {T<:Union{PEPSTensor,PEPSOrth}}
     EMPTY = Vector{Int}()
     neighbors = [
@@ -178,7 +184,7 @@ function bondenv_ntu(
         (2, 1, [EAST, SOUTH, WEST]),
         (2, 2, [EAST, SOUTH, WEST]),
     ]
-    m = collect_neighbors(peps, row, col, neighbors)
+    m = collect_neighbors(peps, row, col, neighbors, alg.add_bwt)
     #= left half
                 (-2 -1)      (-2 +0)
                     ║           ║   
