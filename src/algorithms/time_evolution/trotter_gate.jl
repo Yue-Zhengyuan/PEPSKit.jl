@@ -1,11 +1,11 @@
 """
 $(TYPEDEF)
 
-Abstract super type for the collection of 2-body Trotter evolution gates.
+Abstract super type for the collection of 2-site Trotter evolution gates.
 """
 abstract type TrotterGates end
 
-Base.getindex(gates::TrotterGates, args...) = Base.getindex(gates.gates, args...)
+Base.getindex(gates::TrotterGates, args...) = Base.getindex(gates.data, args...)
 
 """
 Collection of 1st (nearest) neighbor 2-body Trotter gates.
@@ -18,7 +18,7 @@ where each `Xᵢⱼ` (or `Yᵢⱼ`) acts on a horizontal (or vertical) bond.
 The Trotter gates are `exp(-dt * Xᵢⱼ)`, `exp(-dt * Yᵢⱼ)`.
 """
 struct TrotterGates1stNeighbor{G} <: TrotterGates
-    gates::G
+    data::G
 end
 
 function TrotterGates1stNeighbor(H::LocalOperator, dt::Number)
@@ -39,6 +39,44 @@ function TrotterGates1stNeighbor(H::LocalOperator, dt::Number)
         return exp(-dt * term)
     end
     return TrotterGates1stNeighbor(gates)
+end
+
+"""
+Collection of 2nd (next-nearest) neighbor Trotter gates
+decomposed to 1st neighbor gates.
+
+Before exponentiating, terms in the Hamiltonian are organized as
+```
+    H = ∑ᵢⱼ(┘ᵢⱼ + ┐ᵢⱼ + ┌ᵢⱼ + └ᵢⱼ)
+```
+where `┘`, `┐`, `┌`, `└` are 3-site operators acting on the clusters
+```
+        3   3---2   2---1   1
+        |       |   |       |
+    1---2       1   3       2---3
+```
+`data[d][i, j]` is the two 1st-neighbor gates (saved in a `Tuple`)
+acting on the `[i, j]` southeast cluster after the network is 
+left-rotated by `90 x (d - 1)` degrees.
+```
+                        ↓   ↓
+    ↓   ↓   ↓           2'--3   (gate 1)
+    1---2---3   =   ↓   ↓   ↓
+    ↓   ↓   ↓       1---2       (gate 2)
+                    ↓   ↓
+```
+"""
+struct TrotterGates2ndNeighbor{G} <: TrotterGates
+    data::G
+end
+
+function TrotterGates2ndNeighbor(H::LocalOperator, dt::Number)
+    return TrotterGates2ndNeighbor([
+        _get_gates_se(H, dt),
+        _get_gates_se(rotl90(H), dt),
+        _get_gates_se(rot180(H), dt),
+        _get_gates_se(rotr90(H), dt),
+    ])
 end
 
 """
@@ -162,4 +200,16 @@ function _get_se3site_term(ham::LocalOperator, row::Int, col::Int)
         (nb1x[i' j'; i j] * units[3][k' k] + units[1][i'; i] * nb1y[j' k'; j k]) / 4
     @tensor term_nb2[i' j' k'; i j k] := (nb2[i' k'; i k] * units[2][j'; j]) / 2
     return term_site + term_nb1 + term_nb2
+end
+
+function _get_gates_se(ham::LocalOperator, dt::Number; trunc = trunctol(; atol = MPSKit.Defaults.tol))
+    Nr, Nc = size(ham)
+    return map(Iterators.product(1:Nr, 1:Nc)) do (row, col)
+        gate3 = exp(-dt * _get_se3site_term(ham, row, col))
+        g2, s, g1 = svd_trunc!(permute(gate3, ((1, 2, 4), (3, 5, 6))); trunc)
+        g2, g1 = absorb_s(g2, s, g1)
+        g2 = permute(g2, ((1, 2), (3, 4)))
+        g1 = permute(g1, ((1, 2), (3, 4)))
+        return (g1, g2)
+    end
 end

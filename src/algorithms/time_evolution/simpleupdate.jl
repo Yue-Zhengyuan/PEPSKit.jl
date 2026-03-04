@@ -14,6 +14,11 @@ $(TYPEDFIELDS)
     imaginary_time::Bool = true
     "When true, assume bipartite unit cell structure"
     bipartite::Bool = false
+    "Method to apply long-range evolution gates
+    (currently supports up to next-nearest neighbor 2-site gates).
+    `:nn` (default) decomposes them to nearest-neighbor gates.
+    `:mpo` converts them them to MPOs."
+    method::Symbol = :nn
     "(Only applicable to InfinitePEPO) 
     When true, the PEPO is regarded as a purified PEPS, and updated as
     `|ρ(t + dt)⟩ = exp(-H dt/2) |ρ(t)⟩`.
@@ -55,7 +60,7 @@ function TimeEvolver(
     _timeevol_sanity_check(psi0, physicalspace(H), alg)
     dt′ = _get_dt(psi0, dt, alg.imaginary_time)
     # create Trotter gates
-    gate = trotterize(H, dt′)
+    gate = trotterize(H, dt′; method = alg.method)
     if isa(gate, TrotterMPOs)
         @assert !alg.bipartite "Trotter MPOs are incompatible with bipartite lattice structure."
     end
@@ -74,9 +79,9 @@ When `gate_ax = 1` (or `2`), the gate will be applied to
 the codomain (or domain) physicsl legs of `state`.
 """
 function _su_xbond!(
-        state::InfiniteState, gate::AbstractTensorMap{T, S, 2, 2}, env::SUWeight,
+        state::InfiniteState, gate, env::SUWeight,
         row::Int, col::Int, trunc::TruncationStrategy; gate_ax::Int = 1
-    ) where {T <: Number, S <: ElementarySpace}
+    )
     Nr, Nc, = size(state)
     cp1 = _next(col, Nc)
     # absorb environment weights
@@ -114,9 +119,9 @@ When `gate_ax = 1` (or `2`), the gate will be applied to
 the codomain (or domain) physicsl legs of `state`.
 """
 function _su_ybond!(
-        state::InfiniteState, gate::AbstractTensorMap{T, S, 2, 2}, env::SUWeight,
+        state::InfiniteState, gate, env::SUWeight,
         row::Int, col::Int, trunc::TruncationStrategy; gate_ax::Int = 1
-    ) where {T <: Number, S <: ElementarySpace}
+    )
     Nr, Nc, = size(state)
     rm1 = _prev(row, Nr)
     # absorb environment weights
@@ -142,7 +147,7 @@ function _su_ybond!(
 end
 
 """
-One iteration of simple update
+One iteration of simple update with 1st neighbor gates `gate`
 """
 function su_iter(
         state::InfiniteState, gate::TrotterGates1stNeighbor,
@@ -177,6 +182,72 @@ function su_iter(
             state2.A[r, cm1] = deepcopy(state2.A[rm1, c])
             env2.data[2, rm1, cm1] = deepcopy(env2.data[2, r, c])
         end
+    end
+    return state2, env2, ϵ
+end
+
+"""
+One iteration of simple update with 2nd-neighbor gates `gate`
+each decomposed into two 1st-neighbor gates as
+```
+    r-1         |               ↓       ↓
+                (1)             |--(1)--|
+                |       ↓       ↓       ↓
+    r   ---(2)--┘       |--(2)--|
+        c       c+1     ↓       ↓
+```
+When acting on the state codomain, gate 2 should be applied first.
+"""
+function su_iter(
+        state::InfiniteState, gate::TrotterGates2ndNeighbor,
+        alg::SimpleUpdate, env::SUWeight
+    )
+    !alg.purified && error("Not implemented.")
+    state2, env2, ϵ = deepcopy(state), deepcopy(env), 0.0
+    trunc = alg.trunc
+    for i in 1:4
+        Nr, Nc, = size(state)
+        for r in 1:Nr, c in 1:Nc
+            (alg.bipartite && r > 1) && continue
+            # apply NN gate 1 (y-bond), but do almost no truncation
+            r1, c1 = r, _next(c, Nc)
+            trunc1 = truncation_strategy(trunc, 2, r1, c1)
+            if isa(trunc1, FixedSpaceTruncation)
+                V = virtualspace(state2[r1, c1], NORTH)
+                trunc1 = truncspace(isdual(V) ? flip(V) : V)
+            end
+            trunc1′ = truncerror(; atol = 1e-14)
+            _su_ybond!(state2, gate[i][r, c][1], env2, r1, c1, trunc1′)
+            if alg.bipartite
+                rm1, cm1 = _prev(r, Nr), _prev(c, Nc)
+                state2.A[rm1, cm1] = deepcopy(state2.A[r, c])
+                state2.A[r, cm1] = deepcopy(state2.A[rm1, c])
+                env2.data[2, rm1, cm1] = deepcopy(env2.data[2, r, c])
+            end
+            # apply NN gate 2 (x-bond)
+            r2, c2 = r, c
+            trunc1 = truncation_strategy(trunc, 1, r2, c2)
+            ϵ′ = _su_xbond!(state2, gate[i][r, c][2], env2, r2, c2, trunc1)
+            ϵ = max(ϵ, ϵ′)
+            if alg.bipartite
+                rp1, cp1 = _next(r, Nr), _next(c, Nc)
+                state2.A[rp1, cp1] = deepcopy(state2.A[r, c])
+                state2.A[rp1, c] = deepcopy(state2.A[r, cp1])
+                env2.data[1, rp1, cp1] = deepcopy(env2.data[1, r, c])
+            end
+            # truncate the bond acted by gate 1
+            ϵ′ = _su_ybond!(state2, nothing, env2, r1, c1, trunc1)
+            ϵ = max(ϵ, ϵ′)
+            if alg.bipartite
+                rm1, cm1 = _prev(r, Nr), _prev(c, Nc)
+                state2.A[rm1, cm1] = deepcopy(state2.A[r, c])
+                state2.A[r, cm1] = deepcopy(state2.A[rm1, c])
+                env2.data[2, rm1, cm1] = deepcopy(env2.data[2, r, c])
+            end
+        end
+        # rotate the state
+        state2, env2 = rotl90(state2), rotl90(env2)
+        trunc = rotl90(trunc)
     end
     return state2, env2, ϵ
 end

@@ -6,7 +6,7 @@ Trotter evolution MPOs acting on 3 or more sites.
 """
 abstract type TrotterMPOs end
 
-Base.getindex(gate::TrotterMPOs, args...) = Base.getindex(gate.mpos, args...)
+Base.getindex(gate::TrotterMPOs, args...) = Base.getindex(gate.data, args...)
 
 """
     struct TrotterMPOs2ndNeighbor{T}
@@ -22,11 +22,11 @@ where `┘`, `┐`, `┌`, `└` refer to the following 3-site clusters
         |       |   |       |
     1---2       1   3       2---3
 ```
-`mpos[d][i, j]` is the `┘ᵢⱼ` MPO acting on the `[i, j]` southeast
+`data[d][i, j]` is the `┘ᵢⱼ` MPO acting on the `[i, j]` southeast
 cluster after the network is left-rotated by `90 x (d - 1)` degrees.
 """
 struct TrotterMPOs2ndNeighbor{T} <: TrotterMPOs
-    mpos::T
+    data::T
 end
 
 function TrotterMPOs2ndNeighbor(H::LocalOperator, dt::Number)
@@ -61,7 +61,7 @@ function gate_to_mpo3(
 end
 
 """
-Obtain the 3-site gate MPO on the southeast cluster at position `[row, col]`
+Obtain 3-site gate MPOs on southeast cluster at all positions `[row, col]`
 ```
     r-1        g3
                 |
@@ -70,16 +70,10 @@ Obtain the 3-site gate MPO on the southeast cluster at position `[row, col]`
         c      c+1
 ```
 """
-function _get_gatempo_se(ham::LocalOperator, dt::Number, row::Int, col::Int)
-    term = _get_se3site_term(ham, row, col)
-    return gate_to_mpo3(exp(-dt * term))
-end
-
-"""
-Construct the 3-site gate MPOs on the southeast cluster 
-for 3-site simple update on square lattice.
-"""
 function _get_gatempos_se(ham::LocalOperator, dt::Number)
     Nr, Nc = size(ham.lattice)
-    return collect(_get_gatempo_se(ham, dt, r, c) for r in 1:Nr, c in 1:Nc)
+    return map(Iterators.product(1:Nr, 1:Nc)) do (row, col)
+        term = _get_se3site_term(ham, row, col)
+        return gate_to_mpo3(exp(-dt * term))
+    end
 end

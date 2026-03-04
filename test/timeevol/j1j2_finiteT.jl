@@ -26,10 +26,10 @@ wts0 = SUWeight(pepo0)
 # 7 = 1 (spin-0) + 2 x 3 (spin-1)
 trunc_pepo = truncrank(7) & truncerror(; atol = 1.0e-12)
 check_interval = 100
+dt, nstep = 1.0e-3, 600
 
 # PEPO approach
-dt, nstep = 1.0e-3, 600
-alg = SimpleUpdate(; trunc = trunc_pepo, purified = false)
+alg = SimpleUpdate(; trunc = trunc_pepo, purified = false, method = :mpo)
 evolver = TimeEvolver(pepo0, ham, dt, nstep, alg, wts0)
 pepo, wts, info = time_evolve(evolver; check_interval)
 env = converge_env(InfinitePartitionFunction(pepo), 16)
@@ -39,7 +39,7 @@ energy = expectation_value(pepo, ham, env) / (Nr * Nc)
 @test energy ≈ bm[2] atol = 5.0e-3
 
 # PEPS (purified PEPO) approach
-alg = SimpleUpdate(; trunc = trunc_pepo, purified = true)
+alg = SimpleUpdate(; trunc = trunc_pepo, purified = true, method = :nn)
 evolver = TimeEvolver(pepo0, ham, dt, nstep, alg, wts0)
 pepo, wts, info = time_evolve(evolver; check_interval)
 env = converge_env(InfinitePartitionFunction(pepo), 16)

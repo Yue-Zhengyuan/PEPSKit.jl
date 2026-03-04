@@ -122,12 +122,13 @@ function _check_hamiltonian_for_trotter(H::LocalOperator)
     return dist
 end
 
-function trotterize(H::LocalOperator, dt::Number)
+function trotterize(H::LocalOperator, dt::Number; method::Symbol)
+    @assert method in (:nn, :mpo)
     dist = _check_hamiltonian_for_trotter(H)
     gate = if dist == 1
         TrotterGates1stNeighbor(H, dt)
     elseif dist == 2
-        TrotterMPOs2ndNeighbor(H, dt)
+        method == :nn ? TrotterGates2ndNeighbor(H, dt) : TrotterMPOs2ndNeighbor(H, dt)
     end
     return gate
 end
