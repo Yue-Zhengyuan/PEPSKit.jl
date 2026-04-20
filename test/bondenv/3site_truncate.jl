@@ -9,7 +9,6 @@ using PEPSKit: cost_function_als, _flip_virtuals!, _cluster_truncate!
 Random.seed!(0)
 maxiter = 600
 check_interval = 20
-trunc = truncerror(; atol = 1.0e-10) & truncrank(2)
 alg = ALSTruncation(; trunc, maxiter, check_interval)
 
 #= Index dimensions
@@ -27,6 +26,7 @@ virtual dimension D, updated with an MPO with bond dimension D′.
 =#
 @testset "3-site iterative optimization ($S)" for S in [Z2Irrep, FermionParity]
     d, D, D′ = 2, 4, 2
+    trunc = truncerror(; atol = 1.0e-10) & truncrank(D)
     Dd, DD′ = D * d, D * D′
     hd, hD, hD′ = div(d, 2), div(D, 2), div(D′, 2)
     hDd, hDD = div(Dd, 2), div(DD′, 2)
