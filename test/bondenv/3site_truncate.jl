@@ -7,9 +7,9 @@ using LinearAlgebra
 using PEPSKit: cost_function_als, _flip_virtuals!, _cluster_truncate!
 
 Random.seed!(0)
-maxiter = 600
-check_interval = 20
-alg = ALSTruncation(; trunc, maxiter, check_interval)
+maxiter = 400
+check_interval = 5
+elt = Float64
 
 #= Index dimensions
                     Dd
@@ -27,20 +27,21 @@ virtual dimension D, updated with an MPO with bond dimension D′.
 @testset "3-site iterative optimization ($S)" for S in [Z2Irrep, FermionParity]
     d, D, D′ = 2, 4, 2
     trunc = truncerror(; atol = 1.0e-10) & truncrank(D)
+    alg = ALSTruncation(; trunc, maxiter, check_interval)
     Dd, DD′ = D * d, D * D′
     hd, hD, hD′ = div(d, 2), div(D, 2), div(D′, 2)
     hDd, hDD = div(Dd, 2), div(DD′, 2)
-    Vext = Vect[S](0 => 600, 1 => 600)
     VDd = Vect[S](0 => hDd, 1 => hDd)
     VDD = Vect[S](0 => hDD, 1 => hDD)
     VD = Vect[S](0 => hD, 1 => hD)
     Vd = Vect[S](0 => hd, 1 => hd)
-    elt = Float64
     # random positive-definite environment
     Vbond = VDd ⊗ VD' ⊗ VD ⊗ VDd'
+    dbond = dim(Vbond)
+    Vext = Vect[S](0 => div(dbond, 2) + 2, 1 => div(dbond, 2) + 2)
     Z = randn(elt, Vext ← Vbond)
+    normalize!(Z)
     benv = Z' * Z
-    normalize!(benv, Inf)
     # untruncated bond tensor
     Ms = [
         randn(elt, VDd ⊗ Vd ← VDD),
@@ -57,7 +58,7 @@ virtual dimension D, updated with an MPO with bond dimension D′.
     cost0, fid0 = cost_function_als(benv, Ms_trunc, Ms)
     @info "Fidelity of truncated Vidal gauge = $fid0.\n"
     # 3-site iterative optimization
-    Ms_trunc, wts, info = PEPSKit.se3site_truncate(Ms, benv, alg)
+    Ms_trunc, wts, info = PEPSKit.se3site_truncate(Ms, Z, alg)
     @info "Improved fidelity = $(info.fid)."
     @test info.fid ≈ cost_function_als(benv, Ms_trunc, Ms)[2]
     @test info.fid > fid0

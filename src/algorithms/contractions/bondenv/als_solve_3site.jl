@@ -1,51 +1,30 @@
-_tensor_R(benv, Ms, x::Int) = _tensor_R(benv, Ms, Val(x))
-_tensor_S(benv, Ms, Ms2, x::Int) = _tensor_S(benv, Ms, Ms2, Val(x))
+_tensor_halfR(Z, Ms, x::Int) = _tensor_halfR(Z, Ms, Val(x))
+_tensor_S(hN, hR, x::Int) = _tensor_S(hN, hR, Val(x))
 
 """
 $(SIGNATURES)
 
 Construct the tensor
 ```
-    ┌benv-┬---┬-----┐
-    |      ╲ ╱      |
-    ├--   --m---b---┤
-    |       ↓   ↓   |
-    ├--   --m̄---b̄---┤
-    |      ╱ ╲      |
-    └-----┴---┴-----┘
+    ┌-------┐
+    | ┌---┬-Z-┬---┐
+    | |    ╲ ╱    |
+    | └   --m---b-┘
+    ↓       ↓   ↓
 ```
 """
-function _tensor_R(benv::BondEnv3site, Ms::Vector{T}, ::Val{1}) where {T <: GenericMPSTensor}
-    (_, m, b) = Ms
-    return @tensoropt Ra[Dw1 Dw′1; Dw0 Dw′0] :=
-        benv[Dw1 De1 Ds1 Dn1; Dw0 De0 Ds0 Dn0] *
-        conj(m[Dw′1 dm De1 Ds1; Dn′1]) * conj(b[Dn′1 db; Dn1]) *
-        m[Dw′0 dm De0 Ds0; Dn′0] * b[Dn′0 db; Dn0]
-end
-
-"""
-$(SIGNATURES)
-
-Construct the tensor
-```
-    ┌benv-┬---┬-----┐
-    |      ╲ ╱      |
-    ├---a2--m2--b2--┤
-    |   ↓   ↓   ↓   |
-    ├--   --m̄---b̄---┤
-    |      ╱ ╲      |
-    └-----┴---┴-----┘
-```
-"""
-function _tensor_S(
-        benv::BondEnv3site, Ms::Vector{T}, Ms2::Vector{T}, ::Val{1}
+function _tensor_halfR(
+        Z::HalfBondEnv3site, Ms::Vector{T}, ::Val{1}
     ) where {T <: GenericMPSTensor}
-    (_, m, b) = Ms
-    (a2, m2, b2) = Ms2
-    return @tensoropt Sa[Dw1 da; Dw′1] :=
-        benv[Dw1 De1 Ds1 Dn1; Dw0 De0 Ds0 Dn0] *
-        conj(m[Dw′1 dm De1 Ds1; Dn′1]) * conj(b[Dn′1 db; Dn1]) *
-        a2[Dw0 da; Dw′0] * m2[Dw′0 dm De0 Ds0; Dn′0] * b2[Dn′0 db; Dn0]
+    return @tensoropt hRa[χ dm db; Dw0 Dw′0] :=
+        Z[χ; Dw0 De0 Ds0 Dn0] * Ms[2][Dw′0 dm De0 Ds0; Dn′0] * Ms[3][Dn′0 db; Dn0]
+end
+
+function _tensor_S(
+        hN::AbstractTensor{E, S, 4}, hR::AbstractTensorMap{E, S, 3, 2}, ::Val{1}
+    ) where {E, S}
+    return @tensor Sa[Dw1 da; Dw′1] :=
+        hN[χ da dm db] * conj(hR[χ dm db; Dw1 Dw′1])
 end
 
 """
@@ -53,13 +32,11 @@ $(SIGNATURES)
 
 Construct the tensor
 ```
-    ┌benv-┬---┬-----┐
-    |      ╲ ╱      |
-    ├---a--   --b---┤
-    |   ↓       ↓   |
-    ├---ā--   --b̄---┤
-    |      ╱ ╲      |
-    └-----┴---┴-----┘
+    ┌-------┐
+    | ┌---┬-Z-┬---┐
+    | |    ╲ ╱    |
+    | └-a--   --b-┘
+    ↓   ↓       ↓
 ```
 """
 function _tensor_R(benv::BondEnv3site, Ms::Vector{T}, ::Val{2}) where {T <: GenericMPSTensor}
@@ -70,29 +47,18 @@ function _tensor_R(benv::BondEnv3site, Ms::Vector{T}, ::Val{2}) where {T <: Gene
         a[Dw0 da; Dw′0] * b[Dn′0 db; Dn0]
 end
 
-"""
-$(SIGNATURES)
-
-Construct the tensor
-```
-    ┌benv-┬---┬-----┐
-    |      ╲ ╱      |
-    ├---a2--m2--b2--┤
-    |   ↓   ↓   ↓   |
-    ├---ā--   --b̄---┤
-    |      ╱ ╲      |
-    └-----┴---┴-----┘
-```
-"""
-function _tensor_S(
-        benv::BondEnv3site, Ms::Vector{T}, Ms2::Vector{T}, ::Val{2}
+function _tensor_halfR(
+        Z::HalfBondEnv3site, Ms::Vector{T}, ::Val{2}
     ) where {T <: GenericMPSTensor}
-    (a, _, b) = Ms
-    (a2, m2, b2) = Ms2
-    return @tensoropt Sm[Dw′1 dm De1 Ds1; Dn′1] :=
-        benv[Dw1 De1 Ds1 Dn1; Dw0 De0 Ds0 Dn0] *
-        conj(a[Dw1 da; Dw′1]) * conj(b[Dn′1 db; Dn1]) *
-        a2[Dw0 da; Dw′0] * m2[Dw′0 dm De0 Ds0; Dn′0] * b2[Dn′0 db; Dn0]
+    return @tensoropt hRm[χ da db; Dw′0 De0 Ds0 Dn′0] :=
+        Z[χ; Dw0 De0 Ds0 Dn0] * Ms[1][Dw0 da; Dw′0] * Ms[3][Dn′0 db; Dn0]
+end
+
+function _tensor_S(
+        hN::AbstractTensor{E, S, 4}, hR::AbstractTensorMap{E, S, 3, 4}, ::Val{2}
+    ) where {E, S}
+    return @tensor Sa[Dw′1 dm De1 Ds1; Dn′1] :=
+        hN[χ da dm db] * conj(hR[χ da db; Dw′1 De1 Ds1 Dn′1])
 end
 
 """
@@ -100,46 +66,52 @@ $(SIGNATURES)
 
 Construct the tensor
 ```
-    ┌benv-┬---┬-----┐
-    |      ╲ ╱      |
-    ├---a---m--   --┤
-    |   ↓   ↓       |
-    ├---ā---m̄--   --┤
-    |      ╱ ╲      |
-    └-----┴---┴-----┘
+    ┌-------┐
+    | ┌---┬-Z-┬---┐
+    | |    ╲ ╱    |
+    | └-a---m--   ┘
+    ↓   ↓   ↓
 ```
 """
-function _tensor_R(benv::BondEnv3site, Ms::Vector{T}, ::Val{3}) where {T <: GenericMPSTensor}
-    (a, m, _) = Ms
-    return @tensoropt Rb[Dn′1 Dn1; Dn′0 Dn0] :=
-        benv[Dw1 De1 Ds1 Dn1; Dw0 De0 Ds0 Dn0] *
-        conj(a[Dw1 da; Dw′1]) * conj(m[Dw′1 dm De1 Ds1; Dn′1]) *
-        a[Dw0 da; Dw′0] * m[Dw′0 dm De0 Ds0; Dn′0]
+function _tensor_halfR(
+        Z::HalfBondEnv3site, Ms::Vector{T}, ::Val{3}
+    ) where {T <: GenericMPSTensor}
+    return @tensoropt hRb[χ da dm; Dn′0 Dn0] :=
+        Z[χ; Dw0 De0 Ds0 Dn0] * Ms[1][Dw0 da; Dw′0] * Ms[2][Dw′0 dm De0 Ds0; Dn′0]
+end
+
+function _tensor_S(
+        hN::AbstractTensor{E, S, 4}, hR::AbstractTensorMap{E, S, 3, 2}, ::Val{3}
+    ) where {E, S}
+    return @tensor Sa[Dn′1 db; Dn1] :=
+        hN[χ da dm db] * conj(hR[χ da dm; Dn′1 Dn1])
 end
 
 """
 $(SIGNATURES)
 
-Construct the tensor
+Construct half of the norm network
 ```
-    ┌benv-┬---┬-----┐
-    |      ╲ ╱      |
-    ├---a2--m2--b2--┤
-    |   ↓   ↓   ↓   |
-    ├---ā---m̄--   --┤
-    |      ╱ ╲      |
-    └-----┴---┴-----┘
+    ┌-------┐
+    | ┌---┬-Z-┬---┐
+    | |    ╲ ╱    |
+    | └-a---m---b-┘
+    ↓   ↓   ↓   ↓
 ```
 """
-function _tensor_S(
-        benv::BondEnv3site, Ms::Vector{T}, Ms2::Vector{T}, ::Val{3}
+function _tensor_halfN(
+        Z::HalfBondEnv3site, Ms::Vector{T}
     ) where {T <: GenericMPSTensor}
-    (a, m, _) = Ms
-    a2, m2, b2 = Ms2
-    return @tensoropt Rb[Dn′1 db; Dn1] :=
-        benv[Dw1 De1 Ds1 Dn1; Dw0 De0 Ds0 Dn0] *
-        conj(a[Dw1 da; Dw′1]) * conj(m[Dw′1 dm De1 Ds1; Dn′1]) *
-        a2[Dw0 da; Dw′0] * m2[Dw′0 dm De0 Ds0; Dn′0] * b2[Dn′0 db; Dn0]
+    return @tensoropt hN[χ da dm db] :=
+        Z[χ; Dw0 De0 Ds0 Dn0] * Ms[1][Dw0 da; Dw′0] *
+        Ms[2][Dw′0 dm De0 Ds0; Dn′0] * Ms[3][Dn′0 db; Dn0]
+end
+function _tensor_halfN(
+        hRa::AbstractTensorMap{E, S, 3, 2},
+        a::GenericMPSTensor{S, 2}
+    ) where {E, S}
+    return @tensor hN[χ da dm db] :=
+        hRa[χ dm db; Dw0 Dw′0] * a[Dw0 da; Dw′0]
 end
 
 """
@@ -162,8 +134,19 @@ function inner_prod(
     @assert length(Ms1) == length(Ms2) == 3
     (a1, m1, b1) = Ms1
     (a2, m2, b2) = Ms2
-    return @tensor contractcheck = true benv[Dw1 De1 Ds1 Dn1; Dw0 De0 Ds0 Dn0] *
+    return @tensor benv[Dw1 De1 Ds1 Dn1; Dw0 De0 Ds0 Dn0] *
         conj(a1[Dw1 da; Dw′1]) *
         conj(m1[Dw′1 dm De1 Ds1; Dn′1]) * conj(b1[Dn′1 db; Dn1]) *
         a2[Dw0 da; Dw′0] * m2[Dw′0 dm De0 Ds0; Dn′0] * b2[Dn′0 db; Dn0]
+end
+
+function cost_function_als3(
+        hN1::AbstractTensor{E, S, 4}, hN2::AbstractTensor{E, S, 4}
+    ) where {E, S}
+    b12 = only((hN1' * hN2).data)
+    b11 = only((hN1' * hN1).data)
+    b22 = only((hN2' * hN2).data)
+    cost = real(b11) + real(b22) - 2 * real(b12)
+    fid = abs2(b12) / abs(b11 * b22)
+    return cost, fid
 end
