@@ -39,14 +39,6 @@ Construct the tensor
     ↓   ↓       ↓
 ```
 """
-function _tensor_R(benv::BondEnv3site, Ms::Vector{T}, ::Val{2}) where {T <: GenericMPSTensor}
-    (a, _, b) = Ms
-    return @tensoropt Rm[Dw′1 De1 Ds1 Dn′1; Dw′0 De0 Ds0 Dn′0] :=
-        benv[Dw1 De1 Ds1 Dn1; Dw0 De0 Ds0 Dn0] *
-        conj(a[Dw1 da; Dw′1]) * conj(b[Dn′1 db; Dn1]) *
-        a[Dw0 da; Dw′0] * b[Dn′0 db; Dn0]
-end
-
 function _tensor_halfR(
         Z::HalfBondEnv3site, Ms::Vector{T}, ::Val{2}
     ) where {T <: GenericMPSTensor}
@@ -132,12 +124,10 @@ function inner_prod(
         benv::BondEnv3site, Ms1::Vector{T}, Ms2::Vector{T}
     ) where {T <: GenericMPSTensor}
     @assert length(Ms1) == length(Ms2) == 3
-    (a1, m1, b1) = Ms1
-    (a2, m2, b2) = Ms2
     return @tensor benv[Dw1 De1 Ds1 Dn1; Dw0 De0 Ds0 Dn0] *
-        conj(a1[Dw1 da; Dw′1]) *
-        conj(m1[Dw′1 dm De1 Ds1; Dn′1]) * conj(b1[Dn′1 db; Dn1]) *
-        a2[Dw0 da; Dw′0] * m2[Dw′0 dm De0 Ds0; Dn′0] * b2[Dn′0 db; Dn0]
+        conj(Ms1[1][Dw1 da; Dw′1]) *
+        conj(Ms1[2][Dw′1 dm De1 Ds1; Dn′1]) * conj(Ms1[3][Dn′1 db; Dn1]) *
+        Ms2[1][Dw0 da; Dw′0] * Ms2[2][Dw′0 dm De0 Ds0; Dn′0] * Ms2[3][Dn′0 db; Dn0]
 end
 
 function cost_function_als3(
