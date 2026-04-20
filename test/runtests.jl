@@ -90,6 +90,9 @@ end
         @time @safetestset "Iterative optimization after truncation" begin
             include("bondenv/bond_truncate.jl")
         end
+        @time @safetestset "Iterative optimization after truncation (3-site)" begin
+            include("bondenv/3site_truncate.jl")
+        end
         @time @safetestset "Gauge fixing" begin
             include("bondenv/benv_gaugefix.jl")
         end
