@@ -8,7 +8,7 @@ using PEPSKit: cost_function_als, _flip_virtuals!, _cluster_truncate!
 
 Random.seed!(0)
 maxiter = 400
-check_interval = 5
+check_interval = 20
 elt = Float64
 
 #= Index dimensions
@@ -40,8 +40,9 @@ virtual dimension D, updated with an MPO with bond dimension D′.
     dbond = dim(Vbond)
     Vext = Vect[S](0 => div(dbond, 2) + 2, 1 => div(dbond, 2) + 2)
     Z = randn(elt, Vext ← Vbond)
-    normalize!(Z)
     benv = Z' * Z
+    normalize!(benv, Inf)
+    @info "Dimension of benv = $(dbond)"
     # untruncated bond tensor
     Ms = [
         randn(elt, VDd ⊗ Vd ← VDD),
@@ -51,15 +52,15 @@ virtual dimension D, updated with an MPO with bond dimension D′.
     normalize!.(Ms, Inf)
     # Vidal gauge truncation
     flips = [isdual(space(M, 1)) for M in Ms[2:end]]
-    Ms_trunc = deepcopy(Ms)
-    _flip_virtuals!(Ms_trunc, flips)
-    _cluster_truncate!(Ms_trunc, fill(trunc, 2))
-    _flip_virtuals!(Ms_trunc, flips)
-    cost0, fid0 = cost_function_als(benv, Ms_trunc, Ms)
+    xs = copy.(Ms)
+    _flip_virtuals!(xs, flips)
+    _cluster_truncate!(xs, fill(trunc, 2))
+    _flip_virtuals!(xs, flips)
+    cost0, fid0 = cost_function_als(benv, xs, Ms)
     @info "Fidelity of truncated Vidal gauge = $fid0.\n"
     # 3-site iterative optimization
-    Ms_trunc, wts, info = PEPSKit.se3site_truncate(Ms, Z, alg)
+    xs, wts, info = PEPSKit.se3site_truncate(Ms, benv, alg)
     @info "Improved fidelity = $(info.fid)."
-    @test info.fid ≈ cost_function_als(benv, Ms_trunc, Ms)[2]
+    @test info.fid ≈ cost_function_als(benv, xs, Ms)[2]
     @test info.fid > fid0
 end

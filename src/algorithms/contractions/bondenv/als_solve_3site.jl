@@ -1,142 +1,151 @@
-_tensor_halfR(Z, Ms, x::Int) = _tensor_halfR(Z, Ms, Val(x))
-_tensor_S(hN, hR, x::Int) = _tensor_S(hN, hR, Val(x))
-
 """
-$(SIGNATURES)
-
-Construct the tensor
+Contract the virtual legs between
 ```
-    ┌-------┐
-    | ┌---┬-Z-┬---┐
-    | |    ╲ ╱    |
-    | └   --m---b-┘
-    ↓       ↓   ↓
+           ╲ ╱      
+    ----a---m---b----
+        ↓   ↓   ↓   
 ```
 """
-function _tensor_halfR(
-        Z::HalfBondEnv3site, Ms::Vector{T}, ::Val{1}
-    ) where {T <: GenericMPSTensor}
-    return @tensoropt hRa[χ dm db; Dw0 Dw′0] :=
-        Z[χ; Dw0 De0 Ds0 Dn0] * Ms[2][Dw′0 dm De0 Ds0; Dn′0] * Ms[3][Dn′0 db; Dn0]
-end
-
-function _tensor_S(
-        hN::AbstractTensor{E, S, 4}, hR::AbstractTensorMap{E, S, 3, 2}, ::Val{1}
-    ) where {E, S}
-    return @tensor Sa[Dw1 da; Dw′1] :=
-        hN[χ da dm db] * conj(hR[χ dm db; Dw1 Dw′1])
+function _combine_ket(
+        a::MPSTensor, m::GenericMPSTensor{S, 4}, b::MPSTensor
+    ) where {S}
+    return @tensoropt ket[Dw0 De0 Ds0 Dn0; da dm db] :=
+        a[Dw0 da; Dw′0] * m[Dw′0 dm De0 Ds0; Dn′0] * b[Dn′0 db; Dn0]
 end
 
 """
-$(SIGNATURES)
-
-Construct the tensor
-```
-    ┌-------┐
-    | ┌---┬-Z-┬---┐
-    | |    ╲ ╱    |
-    | └-a--   --b-┘
-    ↓   ↓       ↓
-```
-"""
-function _tensor_halfR(
-        Z::HalfBondEnv3site, Ms::Vector{T}, ::Val{2}
-    ) where {T <: GenericMPSTensor}
-    return @tensoropt hRm[χ da db; Dw′0 De0 Ds0 Dn′0] :=
-        Z[χ; Dw0 De0 Ds0 Dn0] * Ms[1][Dw0 da; Dw′0] * Ms[3][Dn′0 db; Dn0]
-end
-
-function _tensor_S(
-        hN::AbstractTensor{E, S, 4}, hR::AbstractTensorMap{E, S, 3, 4}, ::Val{2}
-    ) where {E, S}
-    return @tensor Sa[Dw′1 dm De1 Ds1; Dn′1] :=
-        hN[χ da dm db] * conj(hR[χ da db; Dw′1 De1 Ds1 Dn′1])
-end
-
-"""
-$(SIGNATURES)
-
-Construct the tensor
-```
-    ┌-------┐
-    | ┌---┬-Z-┬---┐
-    | |    ╲ ╱    |
-    | └-a---m--   ┘
-    ↓   ↓   ↓
-```
-"""
-function _tensor_halfR(
-        Z::HalfBondEnv3site, Ms::Vector{T}, ::Val{3}
-    ) where {T <: GenericMPSTensor}
-    return @tensoropt hRb[χ da dm; Dn′0 Dn0] :=
-        Z[χ; Dw0 De0 Ds0 Dn0] * Ms[1][Dw0 da; Dw′0] * Ms[2][Dw′0 dm De0 Ds0; Dn′0]
-end
-
-function _tensor_S(
-        hN::AbstractTensor{E, S, 4}, hR::AbstractTensorMap{E, S, 3, 2}, ::Val{3}
-    ) where {E, S}
-    return @tensor Sa[Dn′1 db; Dn1] :=
-        hN[χ da dm db] * conj(hR[χ da dm; Dn′1 Dn1])
-end
-
-"""
-$(SIGNATURES)
-
-Construct half of the norm network
-```
-    ┌-------┐
-    | ┌---┬-Z-┬---┐
-    | |    ╲ ╱    |
-    | └-a---m---b-┘
-    ↓   ↓   ↓   ↓
-```
-"""
-function _tensor_halfN(
-        Z::HalfBondEnv3site, Ms::Vector{T}
-    ) where {T <: GenericMPSTensor}
-    return @tensoropt hN[χ da dm db] :=
-        Z[χ; Dw0 De0 Ds0 Dn0] * Ms[1][Dw0 da; Dw′0] *
-        Ms[2][Dw′0 dm De0 Ds0; Dn′0] * Ms[3][Dn′0 db; Dn0]
-end
-function _tensor_halfN(
-        hRa::AbstractTensorMap{E, S, 3, 2},
-        a::GenericMPSTensor{S, 2}
-    ) where {E, S}
-    return @tensor hN[χ da dm db] :=
-        hRa[χ dm db; Dw0 Dw′0] * a[Dw0 da; Dw′0]
-end
-
-"""
-$(SIGNATURES)
-
-Calculate the inner product
+Construct the norm with bra bond tensors removed
 ```
     ┌benv-┬---┬-----┐
     |      ╲ ╱      |
-    ├---a2--m2--b2--┤
+    ├---a---m---b---┤
     |   ↓   ↓   ↓   |
-    ├---ā1--m̄1--b̄1--┤
+    ├--           --┤
+    |      ╱ ╲      |
+    └-----┴---┴-----┘
+```
+"""
+function _benv_ket(benv::BondEnv3site, ket::AbstractTensorMap{T, S, 4, 3}) where {T, S}
+    return benv * twistdual(ket, 1:4)
+end
+
+"""
+    _als_tensor_R(benv::BondEnv3site, xs::Vector{<:GenericMPSTensor}, i::Int)
+
+Construct the bond environment around the `i`th tensor
+in three-site ALS optimization.
+```
+    i = 1               i = 2               i = 3
+    ┌benv-┬---┬-----┐   ┌benv-┬---┬-----┐   ┌benv-┬---┬-----┐
+    |      ╲ ╱      |   |      ╲ ╱      |   |      ╲ ╱      |
+    ├--   --m---b---┤   ├---a--   --b---┤   ├---a---m--   --┤
+    |       ↓   ↓   |   |   ↓       ↓   |   |   ↓   ↓       |
+    ├--   --m̄---b̄---┤   ├---ā--   --b̄---┤   ├---ā---m̄--   --┤
+    |      ╱ ╲      |   |      ╱ ╲      |   |      ╱ ╲      |
+    └-----┴---┴-----┘   └-----┴---┴-----┘   └-----┴---┴-----┘
+```
+"""
+function _als_tensor_R(benv::BondEnv3site, xs::Vector{<:GenericMPSTensor}, ::Val{1})
+    return @tensoropt Ra[Dw1 Dw′1; Dw0 Dw′0] :=
+        benv[Dw1 De1 Ds1 Dn1; Dw0 De0 Ds0 Dn0] *
+        conj(xs[2][Dw′1 dm De1 Ds1; Dn′1]) * conj(xs[3][Dn′1 db; Dn1]) *
+        xs[2][Dw′0 dm De0 Ds0; Dn′0] * xs[3][Dn′0 db; Dn0]
+end
+function _als_tensor_R(benv::BondEnv3site, xs::Vector{<:GenericMPSTensor}, ::Val{2})
+    return @tensoropt Rm[Dw′1 De1 Ds1 Dn′1; Dw′0 De0 Ds0 Dn′0] :=
+        benv[Dw1 De1 Ds1 Dn1; Dw0 De0 Ds0 Dn0] *
+        conj(xs[1][Dw1 da; Dw′1]) * conj(xs[3][Dn′1 db; Dn1]) *
+        xs[1][Dw0 da; Dw′0] * xs[3][Dn′0 db; Dn0]
+end
+function _als_tensor_R(benv::BondEnv3site, xs::Vector{<:GenericMPSTensor}, ::Val{3})
+    return @tensoropt Rb[Dn′1 Dn1; Dn′0 Dn0] :=
+        benv[Dw1 De1 Ds1 Dn1; Dw0 De0 Ds0 Dn0] *
+        conj(xs[1][Dw1 da; Dw′1]) * conj(xs[2][Dw′1 dm De1 Ds1; Dn′1]) *
+        xs[1][Dw0 da; Dw′0] * xs[2][Dw′0 dm De0 Ds0; Dn′0]
+end
+
+"""
+Calculate the 3-site norm
+```
+    ┌benv-┬---┬-----┐
+    |      ╲ ╱      |
+    ├---a---m---b---┤
+    |   ↓   ↓   ↓   |
+    ├---ā---m̄---b̄---┤
+    |      ╱ ╲      |
+    └-----┴---┴-----┘
+```
+using pre-calcuated partial contraction results.
+"""
+function _als_norm(
+        ket::AbstractTensorMap{T, S, 4, 3}, benv_ket::AbstractTensorMap{T, S, 4, 3}
+    ) where {T, S}
+    return @tensor benv_ket[Dw1 De1 Ds1 Dn1; da dm db] *
+        conj(ket[Dw1 De1 Ds1 Dn1; da dm db])
+end
+
+"""
+    _als_tensor_S(
+        benv_ket::AbstractTensorMap{T, S, 4, 3},
+        xs::Vector{<:GenericMPSTensor}, i::Int
+    ) where {T <: Number, S <: ElementarySpace}
+
+Construct the overlap but with one of the bra bond tensor removed.
+```
+    i = 1               i = 2               i = 3
+    ┌benv-┬---┬-----┐   ┌benv-┬---┬-----┐   ┌benv-┬---┬-----┐
+    |      ╲ ╱      |   |      ╲ ╱      |   |      ╲ ╱      |
+    ├---a₂--m₂--b₂--┤   ├---a₂--m₂--b₂--┤   ├---a₂--m₂--b₂--┤
+    |   ↓   ↓   ↓   |   |   ↓   ↓   ↓   |   |   ↓   ↓   ↓   |
+    ├--   --m̄---b̄---┤   ├---ā--   --b̄---┤   ├---ā---m̄--   --┤
+    |      ╱ ╲      |   |      ╱ ╲      |   |      ╱ ╲      |
+    └-----┴---┴-----┘   └-----┴---┴-----┘   └-----┴---┴-----┘
+```
+The ket part is provided by the partial contraction `benv_ket`.
+"""
+function _als_tensor_S(
+        benv_ket::AbstractTensorMap{T, S, 4, 3},
+        xs::Vector{<:GenericMPSTensor}, ::Val{1}
+    ) where {T <: Number, S <: ElementarySpace}
+    return @tensoropt Sa[Dw1 da; Dw′1] :=
+        benv_ket[Dw1 De1 Ds1 Dn1; da dm db] *
+        conj(xs[2][Dw′1 dm De1 Ds1; Dn′1]) * conj(xs[3][Dn′1 db; Dn1])
+end
+function _als_tensor_S(
+        benv_ket::AbstractTensorMap{T, S, 4, 3},
+        xs::Vector{<:GenericMPSTensor}, ::Val{2}
+    ) where {T <: Number, S <: ElementarySpace}
+    return @tensoropt Sm[Dw′1 dm De1 Ds1; Dn′1] :=
+        benv_ket[Dw1 De1 Ds1 Dn1; da dm db] *
+        conj(xs[1][Dw1 da; Dw′1]) * conj(xs[3][Dn′1 db; Dn1])
+end
+function _als_tensor_S(
+        benv_ket::AbstractTensorMap{T, S, 4, 3},
+        xs::Vector{<:GenericMPSTensor}, ::Val{3}
+    ) where {T <: Number, S <: ElementarySpace}
+    return @tensoropt Sb[Dn′1 db; Dn1] :=
+        benv_ket[Dw1 De1 Ds1 Dn1; da dm db] *
+        conj(xs[1][Dw1 da; Dw′1]) * conj(xs[2][Dw′1 dm De1 Ds1; Dn′1])
+end
+
+"""
+Calculate the 3-site ALS inner product ⟨a₁,m₁,b₁|a₂,m₂,b₂⟩
+```
+    ┌benv-┬---┬-----┐
+    |      ╲ ╱      |
+    ├---a₂--m₂--b₂--┤
+    |   ↓   ↓   ↓   |
+    ├---ā₁--m̄₁--b̄₁--┤
     |      ╱ ╲      |
     └-----┴---┴-----┘
 ```
 """
 function inner_prod(
-        benv::BondEnv3site, Ms1::Vector{T}, Ms2::Vector{T}
+        benv::BondEnv3site, xs1::Vector{T}, xs2::Vector{T}
     ) where {T <: GenericMPSTensor}
-    @assert length(Ms1) == length(Ms2) == 3
-    return @tensor benv[Dw1 De1 Ds1 Dn1; Dw0 De0 Ds0 Dn0] *
-        conj(Ms1[1][Dw1 da; Dw′1]) *
-        conj(Ms1[2][Dw′1 dm De1 Ds1; Dn′1]) * conj(Ms1[3][Dn′1 db; Dn1]) *
-        Ms2[1][Dw0 da; Dw′0] * Ms2[2][Dw′0 dm De0 Ds0; Dn′0] * Ms2[3][Dn′0 db; Dn0]
-end
-
-function cost_function_als3(
-        hN1::AbstractTensor{E, S, 4}, hN2::AbstractTensor{E, S, 4}
-    ) where {E, S}
-    b12 = only((hN1' * hN2).data)
-    b11 = only((hN1' * hN1).data)
-    b22 = only((hN2' * hN2).data)
-    cost = real(b11) + real(b22) - 2 * real(b12)
-    fid = abs2(b12) / abs(b11 * b22)
-    return cost, fid
+    @assert length(xs1) == length(xs2) == 3
+    return @tensoropt benv[Dw1 De1 Ds1 Dn1; Dw0 De0 Ds0 Dn0] *
+        conj(xs1[1][Dw1 da; Dw′1]) *
+        conj(xs1[2][Dw′1 dm De1 Ds1; Dn′1]) * conj(xs1[3][Dn′1 db; Dn1]) *
+        xs2[1][Dw0 da; Dw′0] * xs2[2][Dw′0 dm De0 Ds0; Dn′0] * xs2[3][Dn′0 db; Dn0]
 end

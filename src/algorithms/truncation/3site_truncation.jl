@@ -1,16 +1,27 @@
 """
+Initialize truncated bond tensors for 3-site ALS
+"""
+function _als_init_truncate(
+        Ms::Vector{T}, trunc::TruncationStrategy
+    ) where {T <: GenericMPSTensor}
+    flips = [isdual(space(M, 1)) for M in Ms[2:end]]
+    xs = copy.(Ms)
+    _flip_virtuals!(xs, flips)
+    wts0, = _cluster_truncate!(xs, fill(trunc, 2))
+    return xs, flips, wts0
+end
+
+"""
 Truncate bonds in the 3-site cluster `Ms = [a, m, b]` using
-the environment (norm tensor) `Z' * Z` surrounding `Ms` as
+the environment (norm tensor) `benv` surrounding `Ms` as
 ```
-    ┌-------┐
-    | ┌---┬-Z-┬---┐
-    | |    ╲ ╱    |
-    | └-a===m===b-┘
-    ↓   ↓   ↓   ↓
-    | ┌-ā===m̄===b̄-┐
-    | |    ╱ ╲    |
-    | └---┴-Z̄-┴---┘
-    └-------┘
+    ┌benv-┬---┬-----┐
+    |      ╲ ╱      |
+    ├---a---m---b---┤
+    |   ↓   ↓   ↓   |
+    ├---ā---m̄---b̄---┤
+    |      ╱ ╲      |
+    └-----┴---┴-----┘
 ```
 `m` is the tensor at the middle site, while `a`, `b` are
 reduced bond tensor from the first and the last site.
@@ -21,46 +32,43 @@ the southeast 3-site cluster.
 Reference: Phys. Rev. B 97, 174408 (2018)
 """
 function se3site_truncate(
-        Ms::Vector{T}, Z::HalfBondEnv3site, alg::ALSTruncation
+        Ms::Vector{T}, benv::BondEnv3site, alg::ALSTruncation
     ) where {T <: GenericMPSTensor}
     # dual check
     @assert length(Ms) == 3
     time00 = time()
     verbose = (alg.check_interval > 0)
 
-    # initialize truncated a, m, b
-    flips = [isdual(space(M, 1)) for M in Ms[2:end]]
-    Ms_trunc = deepcopy(Ms)
-    _flip_virtuals!(Ms_trunc, flips)
-    wts0, = _cluster_truncate!(Ms_trunc, fill(alg.trunc, 2))
+    # untruncated things
+    ket2 = _combine_ket(Ms...)
+    benv_ket2 = _benv_ket(benv, ket2)
+    b22 = _als_norm(ket2, benv_ket2)
 
-    # cache of half R tensors
-    hR_cache = [_tensor_halfR(Z, Ms_trunc, idx) for idx in 1:3]
+    # initialize truncated bond tensors
+    xs, flips, wts0 = _als_init_truncate(Ms, alg.trunc)
 
-    # half of the norm network
-    hN = _tensor_halfN(hR_cache[1], Ms_trunc[1])
-    hN2 = _tensor_halfN(Z, Ms)
+    # initialize ALS cache
+    Rs = [_als_tensor_R(benv, xs, i) for i in 1:3]
+    Ss = [_als_tensor_S(benv_ket2, xs, i) for i in 1:3]
 
     # initial cost and fidelity
-    cost00, fid = cost_function_als3(hN, hN2)
+    cost00, fid = cost_function_als(Rs[1], Ss[1], xs[1], b22)
     cost0, fid0, Δcost, Δfid, Δs = cost00, fid, NaN, NaN, NaN
     verbose && @info "ALS3 init" * _als_message(0, cost0, fid, Δcost, Δfid, Δs, 0.0)
 
     for iter in 1:(alg.maxiter)
         time0 = time()
-        for (idx, x0) in enumerate(Ms_trunc)
-            hR = hR_cache[idx]
-            R = hR' * hR
-            S = _tensor_S(hN2, hR, idx)
-            Ms_trunc[idx] = _solve_als_pinv(R, S)
-            # update cache needed by optimization of next site
-            idx_next = _next(idx, 3)
-            hR_cache[idx_next] = _tensor_halfR(Z, Ms_trunc, idx_next)
+        for (i, (Rx, Sx, x)) in enumerate(zip(Rs, Ss, xs))
+            xs[i] = _solve_als_pinv(Rx, Sx)
+            # @debug "Bond truncation info $(i):" info_x
+            # update R, S for the next site
+            i_next = _next(i, 3)
+            Rs[i_next] = _als_tensor_R(benv, xs, i_next)
+            Ss[i_next] = _als_tensor_S(benv_ket2, xs, i_next)
         end
         # compare cost, fidelity, bond weights
-        hN = _tensor_halfN(hR_cache[1], Ms_trunc[1])
-        cost, fid = cost_function_als3(hN, hN2)
-        wts = _get_allprojs(Ms_trunc, fill(notrunc(), 2))[3]
+        cost, fid = cost_function_als(Rs[1], Ss[1], xs[1], b22)
+        wts = _get_allprojs(xs, fill(notrunc(), 2))[3]
         Δcost = abs(cost - cost0) / cost00
         Δfid = abs(fid - fid0)
         Δs = mean(
@@ -88,8 +96,8 @@ function se3site_truncate(
         converge && break
     end
     # convert to Vidal gauge at the end
-    wts, = _cluster_truncate!(Ms_trunc, fill(notrunc(), 2))
+    wts, = _cluster_truncate!(xs, fill(notrunc(), 2))
     # restore virtual arrows
-    _flip_virtuals!(Ms_trunc, flips)
-    return Ms_trunc, wts, (; fid, Δfid, Δs)
+    _flip_virtuals!(xs, flips)
+    return xs, wts, (; fid, Δfid, Δs)
 end
