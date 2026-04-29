@@ -45,23 +45,34 @@ in three-site ALS optimization.
     └-----┴---┴-----┘   └-----┴---┴-----┘   └-----┴---┴-----┘
 ```
 """
-function _als_tensor_R(benv::BondEnv3site, xs::Vector{<:GenericMPSTensor}, ::Val{1})
+function _als_tensor_R(benv::BondEnv3site, xs::Vector{<:GenericMPSTensor}, i::Int)
+    @assert 1 <= i <= 3
+    return if i == 1
+        _als3s_tensor_R1(benv, xs[2], xs[3])
+    elseif i == 2
+        _als3s_tensor_R2(benv, xs[1], xs[3])
+    else
+        _als3s_tensor_R3(benv, xs[1], xs[2])
+    end
+end
+
+function _als3s_tensor_R1(benv::BondEnv3site, m::GenericMPSTensor{S, 4}, b::MPSTensor) where {S}
     return @tensoropt Ra[Dw1 Dw′1; Dw0 Dw′0] :=
         benv[Dw1 De1 Ds1 Dn1; Dw0 De0 Ds0 Dn0] *
-        conj(xs[2][Dw′1 dm De1 Ds1; Dn′1]) * conj(xs[3][Dn′1 db; Dn1]) *
-        xs[2][Dw′0 dm De0 Ds0; Dn′0] * xs[3][Dn′0 db; Dn0]
+        conj(m[Dw′1 dm De1 Ds1; Dn′1]) * conj(b[Dn′1 db; Dn1]) *
+        m[Dw′0 dm De0 Ds0; Dn′0] * b[Dn′0 db; Dn0]
 end
-function _als_tensor_R(benv::BondEnv3site, xs::Vector{<:GenericMPSTensor}, ::Val{2})
+function _als3s_tensor_R2(benv::BondEnv3site, a::MPSTensor, b::MPSTensor)
     return @tensoropt Rm[Dw′1 De1 Ds1 Dn′1; Dw′0 De0 Ds0 Dn′0] :=
         benv[Dw1 De1 Ds1 Dn1; Dw0 De0 Ds0 Dn0] *
-        conj(xs[1][Dw1 da; Dw′1]) * conj(xs[3][Dn′1 db; Dn1]) *
-        xs[1][Dw0 da; Dw′0] * xs[3][Dn′0 db; Dn0]
+        conj(a[Dw1 da; Dw′1]) * conj(b[Dn′1 db; Dn1]) *
+        a[Dw0 da; Dw′0] * b[Dn′0 db; Dn0]
 end
-function _als_tensor_R(benv::BondEnv3site, xs::Vector{<:GenericMPSTensor}, ::Val{3})
+function _als3s_tensor_R3(benv::BondEnv3site, a::MPSTensor, m::GenericMPSTensor{S, 4}) where {S}
     return @tensoropt Rb[Dn′1 Dn1; Dn′0 Dn0] :=
         benv[Dw1 De1 Ds1 Dn1; Dw0 De0 Ds0 Dn0] *
-        conj(xs[1][Dw1 da; Dw′1]) * conj(xs[2][Dw′1 dm De1 Ds1; Dn′1]) *
-        xs[1][Dw0 da; Dw′0] * xs[2][Dw′0 dm De0 Ds0; Dn′0]
+        conj(a[Dw1 da; Dw′1]) * conj(m[Dw′1 dm De1 Ds1; Dn′1]) *
+        a[Dw0 da; Dw′0] * m[Dw′0 dm De0 Ds0; Dn′0]
 end
 
 """
@@ -105,27 +116,41 @@ The ket part is provided by the partial contraction `benv_ket`.
 """
 function _als_tensor_S(
         benv_ket::AbstractTensorMap{T, S, 4, 3},
-        xs::Vector{<:GenericMPSTensor}, ::Val{1}
+        xs::Vector{<:GenericMPSTensor}, i::Int
+    ) where {T <: Number, S <: ElementarySpace}
+    @assert 1 <= i <= 3
+    return if i == 1
+        _als3s_tensor_S1(benv_ket, xs[2], xs[3])
+    elseif i == 2
+        _als3s_tensor_S2(benv_ket, xs[1], xs[3])
+    else
+        _als3s_tensor_S3(benv_ket, xs[1], xs[2])
+    end
+end
+
+function _als3s_tensor_S1(
+        benv_ket::AbstractTensorMap{T, S, 4, 3},
+        m::GenericMPSTensor{S, 4}, b::MPSTensor
     ) where {T <: Number, S <: ElementarySpace}
     return @tensoropt Sa[Dw1 da; Dw′1] :=
         benv_ket[Dw1 De1 Ds1 Dn1; da dm db] *
-        conj(xs[2][Dw′1 dm De1 Ds1; Dn′1]) * conj(xs[3][Dn′1 db; Dn1])
+        conj(m[Dw′1 dm De1 Ds1; Dn′1]) * conj(b[Dn′1 db; Dn1])
 end
-function _als_tensor_S(
+function _als3s_tensor_S2(
         benv_ket::AbstractTensorMap{T, S, 4, 3},
-        xs::Vector{<:GenericMPSTensor}, ::Val{2}
+        a::MPSTensor, b::MPSTensor
     ) where {T <: Number, S <: ElementarySpace}
     return @tensoropt Sm[Dw′1 dm De1 Ds1; Dn′1] :=
         benv_ket[Dw1 De1 Ds1 Dn1; da dm db] *
-        conj(xs[1][Dw1 da; Dw′1]) * conj(xs[3][Dn′1 db; Dn1])
+        conj(a[Dw1 da; Dw′1]) * conj(b[Dn′1 db; Dn1])
 end
-function _als_tensor_S(
+function _als3s_tensor_S3(
         benv_ket::AbstractTensorMap{T, S, 4, 3},
-        xs::Vector{<:GenericMPSTensor}, ::Val{3}
+        a::MPSTensor, m::GenericMPSTensor{S, 4}
     ) where {T <: Number, S <: ElementarySpace}
     return @tensoropt Sb[Dn′1 db; Dn1] :=
         benv_ket[Dw1 De1 Ds1 Dn1; da dm db] *
-        conj(xs[1][Dw1 da; Dw′1]) * conj(xs[2][Dw′1 dm De1 Ds1; Dn′1])
+        conj(a[Dw1 da; Dw′1]) * conj(m[Dw′1 dm De1 Ds1; Dn′1])
 end
 
 """
