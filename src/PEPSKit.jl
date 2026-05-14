@@ -93,6 +93,7 @@ include("algorithms/contractions/bondenv/benv_tools.jl")
 include("algorithms/contractions/bondenv/gaugefix.jl")
 include("algorithms/contractions/bondenv/als_solve.jl")
 include("algorithms/contractions/bondenv/als_solve_3site.jl")
+include("algorithms/contractions/bondenv/als_solve_2bond.jl")
 include("algorithms/contractions/bondenv/als_proj_3site.jl")
 include("algorithms/contractions/bondenv/benv_ctm.jl")
 include("algorithms/contractions/correlator/peps.jl")
@@ -111,6 +112,7 @@ include("algorithms/truncation/fullenv_truncation.jl")
 include("algorithms/truncation/bond_tensor.jl")
 include("algorithms/truncation/bond_truncation.jl")
 include("algorithms/truncation/3site_truncation.jl")
+include("algorithms/truncation/2bond_truncation.jl")
 include("algorithms/truncation/proj3_truncation.jl")
 
 include("algorithms/time_evolution/apply_gate.jl")
@@ -152,7 +154,8 @@ export PEPSOptimize, GeomSum, ManualIter, LinSolver, EigSolver
 export fixedpoint
 
 export absorb_weight
-export ALSTruncation, ALSProjTruncation, FullEnvTruncation
+export ALSTruncation, FullEnvTruncation
+export ALSProjTruncation, ALS2BondTruncation
 export SimpleUpdate
 export TimeEvolver, timestep, time_evolve
 
