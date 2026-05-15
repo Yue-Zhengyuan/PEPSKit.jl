@@ -41,7 +41,7 @@ dt, nstep, check_interval = 5.0e-3, 40, 40
 end
 
 @testset "Neighbourhood tensor update" begin
-    trunc_pepo = truncrank(4) & truncerror(; atol = 1.0e-12)
+    trunc_pepo = truncrank(7) & truncerror(; atol = 1.0e-12)
     opt_alg = ALSTruncation(; trunc = trunc_pepo, tol = 1.0e-10)
     alg = NeighbourUpdate(; opt_alg, bondenv_alg = NNEnv())
     pepo = deepcopy(pepo0)

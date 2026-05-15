@@ -14,47 +14,64 @@ function _ntu_iter(
         state::InfiniteState, gate::Vector{T}, wts::SUWeight,
         sites::Vector{CartesianIndex{2}}, alg::NeighbourUpdate
     ) where {T <: AbstractTensorMap}
-    truncs = _get_cluster_trunc(alg.opt_alg.trunc, sites)
     state, wts = copy(state), deepcopy(wts)
 
+    # apply gate MPO without truncation
     Ms, invperms = _get_cluster_permute(state, sites)
     flips = [isdual(space(M, 1)) for M in Iterators.drop(Ms, 1)]
     _flip_virtuals!(Ms, flips) # flip virtual arrows in `Ms` to ←
-
-    # apply gate MPO without truncation
     _apply_gatempo!(Ms, gate)
-    _flip_virtuals!(Ms, flips) # restore virtual arrows in `Ms`
     for (M, s, invperm) in zip(Ms, sites, invperms)
         state[s] = permute(M, invperm)
     end
 
+    # truncated Vidal gauge projectors
+    truncs = _get_cluster_trunc(alg.opt_alg.trunc, sites)
+    Pas, Pbs = _get_allprojs(Ms, truncs)
+    _flip_virtuals!(Pas, Pbs, flips) # restore virtual arrows in `Ms`
+
     # truncate each bond sequentially along the path
     info = (; fid = 1.0)
     nbond = length(sites) - 1
-    for (i, bondsites) in enumerate(zip(sites, Iterators.drop(sites, 1)))
+    for (i, (site1, site2)) in enumerate(zip(sites, Iterators.drop(sites, 1)))
         trunc = truncs[i]
         alg′ = (@set alg.opt_alg.trunc = trunc)
         stype1 = (i == 1) ? :first : :middle
         stype2 = (i == nbond) ? :last : :middle
-        state, wts, info′ = _bond_truncate(state, wts, bondsites, (stype1, stype2), alg′)
+        state, wts, info′ = _bond_truncate(
+            state, wts, site1, site2, Pas[i], Pbs[i], (stype1, stype2), alg′
+        )
         # record the worst fidelity
         (info′.fid < info.fid) && (info = info′)
     end
     return state, wts, info
 end
 
+function _bond_tensor_first(
+        A, Pa::MPSBondTensor; gate_ax::Int = 1, kwargs...
+    )
+    a, X = bond_tensor_first(A; gate_ax, kwargs...)
+    @tensor a[-1 -2; -3] := a[-1 -2; 1] * Pa[1; -3]
+    return a, X
+end
+
+function _bond_tensor_last(
+        B, Pb::MPSBondTensor; gate_ax::Int = 1, kwargs...
+    )
+    b, Y = bond_tensor_last(B; gate_ax, kwargs...)
+    @tensor b[-1 -2; -3] := Pb[-1; 1] * b[1 -2; -3]
+    return b, Y
+end
+
 """
 Truncate a nearest neighbor bond between `site1` and `site2`
 after rotating the bond to standard x direction `A ← B`.
-
-`bondtype` takes values in (1, 2, 3), meaning that the current bond is
-(the first, a middle, the last) bond in the updated cluster.
 """
 function _bond_truncate(
         state::InfiniteState, wts::SUWeight,
-        (site1, site2)::NTuple{2, CartesianIndex{2}},
-        (stype1, stype2)::NTuple{2, Symbol},
-        alg::NeighbourUpdate; gate::Union{NNGate, Nothing} = nothing
+        site1::CartesianIndex{2}, site2::CartesianIndex{2},
+        Pa::MPSBondTensor, Pb::MPSBondTensor,
+        (stype1, stype2)::NTuple{2, Symbol}, alg::NeighbourUpdate
     )
     # rotate bond to standard x direction `A ← B`
     ucell = size(state)[1:2]
@@ -71,16 +88,16 @@ function _bond_truncate(
     # create bond environment
     qrtrunc = trunctol(; rtol = 1.0e-12)
     a, X = if stype1 == :first
-        bond_tensor_first(A; trunc = qrtrunc)
+        _bond_tensor_first(A, Pa; trunc = qrtrunc)
     else
         @assert stype1 == :middle
-        bond_tensor_midnext(A; trunc = qrtrunc)
+        insertrightunit(Pa, 1), A
     end
     b, Y = if stype2 == :last
-        bond_tensor_last(B; trunc = qrtrunc)
+        _bond_tensor_last(B, Pb; trunc = qrtrunc)
     else
         @assert stype2 == :middle
-        bond_tensor_midprev(B; trunc = qrtrunc)
+        insertrightunit(Pb, 1), B
     end
     benv = bondenv_ntu(row, col, X, Y, state2, alg.bondenv_alg)
     @debug "cond(benv) before gauge fix: $(LinearAlgebra.cond(benv))"
@@ -94,21 +111,18 @@ function _bond_truncate(
         @debug "cond(benv) after gauge fix: $(LinearAlgebra.cond(benv))"
     end
 
-    # (optional) apply the NN gate without truncation
-    if !(gate === nothing)
-        a, s, b, = _apply_gate(a, b, gate, truncerror(; atol = 1.0e-15))
-    end
+    # truncate
     a, s, b, info = bond_truncate(a, b, benv, alg.opt_alg)
 
     A = if stype1 == :first
         undo_bond_tensor_first(a, X)
     else
-        undo_bond_tensor_midnext(a, X)
+        apply_projector(X, removeunit(a, 2))
     end
     B = if stype2 == :last
         undo_bond_tensor_last(b, Y)
     else
-        undo_bond_tensor_midprev(b, Y)
+        apply_projector(removeunit(b, 2), Y)
     end
 
     state2[row, col] = normalize!(A, Inf)

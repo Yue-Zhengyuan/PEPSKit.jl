@@ -63,20 +63,3 @@ function _su_iter!(
     end
     return ϵ
 end
-
-"""
-Get the `TruncationStrategy` for each bond in the cluster
-updated by the Trotter evolution MPO.
-"""
-function _get_cluster_trunc(
-        trunc::TruncationStrategy, sites::Vector{CartesianIndex{2}}
-    )
-    return map(sites, Iterators.drop(sites, 1)) do site1, site2
-        (d, r, c), rev = _nn_bondrev(site1, site2)
-        t = truncation_strategy(trunc, d, r, c)
-        if rev && isa(t, TruncationSpace)
-            t = truncspace(flip(t.space)')
-        end
-        return t
-    end
-end

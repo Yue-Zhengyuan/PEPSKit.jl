@@ -257,6 +257,22 @@ function _flip_virtuals!(
 end
 
 """
+Flip the virtual arrows for the bond projectors `Pas`, `Pbs`
+"""
+function _flip_virtuals!(
+        Pas::Vector{<:MPSBondTensor}, Pbs::Vector{<:MPSBondTensor},
+        flips::Vector{Bool}; inv::Bool = false
+    )
+    @assert length(flips) == length(Pas) == length(Pbs)
+    for (n, (f, Pa, Pb)) in enumerate(zip(flips, Pas, Pbs))
+        !f && continue
+        Pas[n] = flip(Pa, 2; inv)
+        Pbs[n] = flip(Pb, 1; inv)
+    end
+    return Pas, Pbs
+end
+
+"""
 Find projectors to truncate internal bonds of the cluster `Ms`.
 """
 function _cluster_truncate!(
