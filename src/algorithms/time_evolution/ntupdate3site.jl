@@ -22,17 +22,25 @@ function _ntu_iter(
     _flip_virtuals!(Ms, flips) # flip virtual arrows in `Ms` to ←
     _apply_gatempo!(Ms, gate)
 
+    # convert to Vidal gauge
+    _cluster_truncate!(Ms, fill(notrunc(), length(Ms) - 1))
+    # truncation projectors
+    truncs = _get_cluster_trunc(alg.opt_alg.trunc, sites)
+    # TODO: avoid calculating Vidal projectors twice
+    ps = map(enumerate(first(_get_allprojs(Ms, truncs)))) do (n, Pa)
+        p = zeros(Int, domain(Pa) ← codomain(Ms[n + 1], 1))
+        for (f1, f2) in fusiontrees(p)
+            p[f1, f2][diagind(p[f1, f2])] .= 1
+        end
+        return p
+    end
+    
     # put un-truncated tensors in `state2`
     # arrow direction is temporarily changed
     for (M, s, invperm) in zip(Ms, sites, invperms)
         state2[s] = permute(M, invperm)
     end
     
-    # Vidal gauge projectors
-    truncs = _get_cluster_trunc(alg.opt_alg.trunc, sites)
-    Pas, Pbs = _get_allprojs(Ms, truncs)
-    _flip_virtuals!(Pas, Pbs, flips)
-
     # bond-wise truncation
     # TODO: reduce code duplication
     fid = 1.0
@@ -51,7 +59,10 @@ function _ntu_iter(
 
         # apply projectors on current bond
         # (also restoring arrow direction)
-        Pa, Pb = Pas[i], Pbs[i]
+        Pa, Pb = ps[i]', ps[i]
+        if flips[i]
+            Pa, Pb = flip(Pa, 2), flip(Pb, 1)
+        end
         A = apply_projector(A, Pa)
         B = apply_projector(Pb, B)
 
