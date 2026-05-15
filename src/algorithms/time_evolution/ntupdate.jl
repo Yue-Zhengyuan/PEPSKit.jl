@@ -76,9 +76,53 @@ function _ntu_iter(
         sites::Vector{CartesianIndex{2}}, alg::NeighbourUpdate
     )
     @assert length(sites) == 2
-    trunc = only(_get_cluster_trunc(alg.opt_alg.trunc, sites))
-    alg′ = (@set alg.opt_alg.trunc = trunc)
-    return _bond_truncate(state, wts, Tuple(sites), (:first, :last), alg′; gate)
+
+    # get bond truncation
+    opt_alg = alg.opt_alg
+    trunc = only(_get_cluster_trunc(opt_alg.trunc, sites))
+    @reset opt_alg.trunc = trunc
+
+    # rotate bond to standard x direction `A ← B`
+    ucell = size(state)[1:2]
+    bond, rev = _nn_bondrev(first(sites), last(sites))
+    dir = first(bond)
+    state2 = _bond_rotation(state, dir, rev; inv = false)
+    wts2 = _bond_rotation(wts, dir, rev; inv = false)
+
+    # rotated bond tensors
+    siteA = _bond_rotation(first(sites), dir, rev, ucell)
+    row, col = siteA[1], siteA[2]
+    A, B = state2[row, col], state2[row, col + 1]
+
+    # create bond environment
+    a, X = bond_tensor_first(A; positive = true)
+    b, Y = bond_tensor_last(B; positive = true)
+    benv = bondenv_ntu(row, col, X, Y, state2, alg.bondenv_alg)
+    @debug "cond(benv) before gauge fix: $(LinearAlgebra.cond(benv))"
+    if alg.fixgauge
+        Z = positive_approx(benv)
+        Z, a, b, (Linv, Rinv) = fixgauge_benv(Z, a, b)
+        X = _fixgauge_benvX(X, Rinv)
+        Y = _fixgauge_benvY(Y, Linv)
+        benv = Z' * Z
+        @debug "cond(L) = $(LinearAlgebra.cond(Linv)); cond(R): $(LinearAlgebra.cond(Rinv))"
+        @debug "cond(benv) after gauge fix: $(LinearAlgebra.cond(benv))"
+    end
+
+    # apply the NN gate
+    a, _, b, = _apply_gate(a, b, gate, truncerror(; atol = 1.0e-15))
+    a, s, b, info = bond_truncate(a, b, benv, opt_alg)
+
+    A = undo_bond_tensor_first(a, X)
+    B = undo_bond_tensor_last(b, Y)
+    state2[row, col] = normalize!(A, Inf)
+    state2[row, col + 1] = normalize!(B, Inf)
+    wts2[1, row, col] = normalize!(s, Inf)
+
+    # rotate back tensors and bond weight
+    state2 = _bond_rotation(state2, dir, rev; inv = true)
+    wts2 = _bond_rotation(wts2, dir, rev; inv = true)
+    return state2, wts2, info
 end
 
 """
