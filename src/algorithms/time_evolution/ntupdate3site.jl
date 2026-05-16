@@ -7,6 +7,19 @@ function _get_cluster_permute(
     return _permute_cluster(Ms, perms), invperms
 end
 
+function _initial_truncate(
+        A::T, B::T, trunc::TruncationStrategy
+    ) where {T <: Union{PEPSTensor, PEPOTensor}}
+    @assert !isdual(domain(A, EAST))
+    a, X = bond_tensor_first(A; positive = true)
+    b, Y = bond_tensor_last(B; positive = true)
+    @tensor ab[-1 -2; -3 -4] := a[-1 -2; 1] * b[1 -3; -4]
+    u, s, vh = svd_trunc!(ab; trunc)
+    a, b′ = absorb_s(u, s, vh)
+    b = permute(b′, ((1, 2), (3,)))
+    return undo_bond_tensor_first(a, X), undo_bond_tensor_last(b, Y)
+end
+
 """
 Neighbourhood tensor update with N-site MPO `gate` (N ≥ 2).
 """
@@ -15,6 +28,7 @@ function _ntu_iter(
         sites::Vector{CartesianIndex{2}}, alg::NeighbourUpdate
     ) where {T <: AbstractTensorMap}
     state2, wts2 = copy(state), deepcopy(wts)
+    truncs = _get_cluster_trunc(alg.opt_alg.trunc, sites)
 
     # apply gate MPO
     Ms, invperms = _get_cluster_permute(state2, sites)
@@ -24,27 +38,21 @@ function _ntu_iter(
 
     # convert to Vidal gauge
     _cluster_truncate!(Ms, fill(notrunc(), length(Ms) - 1))
-    # truncation projectors
-    truncs = _get_cluster_trunc(alg.opt_alg.trunc, sites)
-    # TODO: avoid calculating Vidal projectors twice
-    ps = map(enumerate(first(_get_allprojs(Ms, truncs)))) do (n, Pa)
-        p = zeros(Int, domain(Pa) ← codomain(Ms[n + 1], 1))
-        for (f1, f2) in fusiontrees(p)
-            p[f1, f2][diagind(p[f1, f2])] .= 1
-        end
-        return p
-    end
-    
     # put un-truncated tensors in `state2`
     # arrow direction is temporarily changed
     for (M, s, invperm) in zip(Ms, sites, invperms)
         state2[s] = permute(M, invperm)
     end
-    
+
     # bond-wise truncation
     # TODO: reduce code duplication
     fid = 1.0
-    for (i, (siteA, siteB)) in enumerate(zip(sites, Iterators.drop(sites, 1)))
+    Np = (state isa InfinitePEPS) ? 1 : 2
+    for (i, (siteA, siteB, f, trunc)) in enumerate(
+            zip(
+                sites, Iterators.drop(sites, 1), flips, truncs
+            )
+        )
         # rotate to standard x direction `A ← B`
         bond, rev = _nn_bondrev(siteA, siteB)
         dir = first(bond)
@@ -55,18 +63,14 @@ function _ntu_iter(
         ucell = size(state2)[1:2]
         siteA′ = _bond_rotation(siteA, dir, rev, ucell)
         row, col = siteA′[1], siteA′[2]
-        A, B = state2[row, col], state2[row, col + 1]
 
-        # apply projectors on current bond
-        # (also restoring arrow direction)
-        Pa, Pb = ps[i]', ps[i]
-        if flips[i]
-            Pa, Pb = flip(Pa, 2), flip(Pb, 1)
+        # initial truncation
+        A, B = _initial_truncate(state2[row, col], state2[row, col + 1], trunc)
+        if f
+            A, B = flip(A, Np + EAST), flip(B, Np + WEST)
         end
-        A = apply_projector(A, Pa)
-        B = apply_projector(Pb, B)
 
-        # factor out bond tensor
+        # get bond tensor with one physical index
         a, X = bond_tensor_first(A; positive = true)
         b, Y = bond_tensor_last(B; positive = true)
 

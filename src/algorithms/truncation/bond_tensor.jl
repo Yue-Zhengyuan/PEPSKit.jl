@@ -1,6 +1,6 @@
 """
-Given the first tensor `A` in the cluster acted on by a gate,
-obtain reduced tensor on its next bond.
+Given a PEPS or PEPO tensor `A`,
+obtain reduced tensor on its next bond with one physical index.
 
 For PEPSTensor,
 ```
@@ -57,8 +57,8 @@ function undo_bond_tensor_first(a::MPSTensor, X::PEPOOrth; gate_ax::Integer = 1)
 end
 
 """
-Given the last tensor `A` in the cluster acted on by a gate,
-obtain reduced tensor on its previous bond.
+Given a PEPS or PEPO tensor `A`,
+obtain reduced tensor on its previous bond with one physical index.
 
 For PEPSTensor,
 ```
@@ -112,40 +112,4 @@ function undo_bond_tensor_last(b::MPSTensor, Y::PEPOOrth; gate_ax::Integer = 1)
     else
         return @tensor A[-1 -2; -3 -4 -5 -6] := b[-6 -2 1] * Y[-1 -3 -4 -5 1]
     end
-end
-
-"""
-Apply projector `p` on the east virtual space of `A`.
-E.g. for PEPSTensor,
-```
-        2'
-        |
-    5'--A---1   1---p---3'
-        | ↘
-        4'   1'
-```
-"""
-function apply_projector(A::PEPSTensor, p::MPSBondTensor)
-    return @tensor A′[-1; -2 -3 -4 -5] := A[-1; -2 1 -4 -5] * p[1; -3]
-end
-function apply_projector(A::PEPOTensor, p::MPSBondTensor)
-    return @tensor A′[-1 -2; -3 -4 -5 -6] := A[-1 -2; -3 1 -5 -6] * p[1; -4]
-end
-
-"""
-Apply projector `p` on the west virtual space of `A`.
-E.g. for PEPSTensor,
-```
-                    2'
-                    |
-    5'--p---1   1---Y---3'
-                    | ↘
-                    4' 1'
-```
-"""
-function apply_projector(p::MPSBondTensor, A::PEPSTensor)
-    return @tensor A′[-1; -2 -3 -4 -5] := p[-5; 1] * A[-1; -2 -3 -4 1]
-end
-function apply_projector(p::MPSBondTensor, A::PEPOTensor)
-    return @tensor A′[-1 -2; -3 -4 -5 -6] := p[-6; 1] * A[-1 -2; -3 -4 -5 1]
 end
