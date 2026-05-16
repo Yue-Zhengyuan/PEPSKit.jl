@@ -1,4 +1,4 @@
-@kwdef struct ALS2BondTruncation{T <: TruncationStrategy}
+@kwdef struct ALS2BondTruncation{T}
     trunc::T
     maxiter::Int = 50
     inneriter::Int = 4

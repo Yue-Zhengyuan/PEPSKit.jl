@@ -1,4 +1,4 @@
-@kwdef struct ALSProjTruncation{T <: TruncationStrategy}
+@kwdef struct ALSProjTruncation{T}
     trunc::T
     maxiter::Int = 50
     inneriter::Int = 4
