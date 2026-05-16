@@ -155,7 +155,7 @@ export fixedpoint
 
 export absorb_weight
 export ALSTruncation, FullEnvTruncation
-export ALSProjTruncation, ALS2BondTruncation
+export ALS3SiteTruncation, ALS2BondTruncation, ALSProjTruncation
 export SimpleUpdate
 export TimeEvolver, timestep, time_evolve
 
