@@ -1,7 +1,7 @@
 @kwdef struct ALS2BondTruncation{T <: TruncationStrategy}
     trunc::T
     maxiter::Int = 50
-    inneriter::Int = 8
+    inneriter::Int = 4
     tol::Float64 = 1.0e-9
     check_interval::Int = 0
 end
