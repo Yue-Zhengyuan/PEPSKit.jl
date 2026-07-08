@@ -15,8 +15,9 @@ which is the 2-norm of (e.g. for two layers of iPEPO)
 ```
 on each bond of the network.
 """
-struct LocalTruncation
+@kwdef struct LocalTruncation
     trunc::TruncationStrategy
+    layerwise_qr::Bool = false
 end
 
 """
@@ -33,7 +34,17 @@ with the east virtual legs transferred to the R tensor
 ```
 Only `R` is calculated and returned.
 """
-function left_orth_twolayer(A1::PEPOTensor, A2::PEPOTensor)
+function left_orth_twolayer(A1::PEPOTensor, A2::PEPOTensor; layerwise_qr::Bool = false)
+    return layerwise_qr ? _left_orth_layerwise(A1, A2) : _left_orth_twolayer(A1, A2)
+end
+function _left_orth_layerwise(A1::PEPOTensor, A2::PEPOTensor)
+    _, R1 = left_orth!(permute(A1, _perm_domain(A1, (2, 4)); copy = true))
+    _, R2 = left_orth!(permute(A2, _perm_domain(A2, (1, 4)); copy = true))
+    @tensor M[-1 -2; -3 -4] := R1[-1; 1 -3] * R2[-2; 1 -4]
+    _, R = left_orth!(M)
+    return R
+end
+function _left_orth_twolayer(A1::PEPOTensor, A2::PEPOTensor)
     MdagM = _get_MdagM(A1, A2)
     D, R = eigh_full!(MdagM)
     # remove small negative eigenvalues due to numerical noises
@@ -66,7 +77,17 @@ with the west virtual legs transferred to the L tensor
 ```
 Only `L` is calculated and returned.
 """
-function right_orth_twolayer(A1::PEPOTensor, A2::PEPOTensor)
+function right_orth_twolayer(A1::PEPOTensor, A2::PEPOTensor; layerwise_qr::Bool = false)
+    return layerwise_qr ? _right_orth_layerwise(A1, A2) : _right_orth_twolayer(A1, A2)
+end
+function _right_orth_layerwise(A1::PEPOTensor, A2::PEPOTensor)
+    L1, = right_orth!(permute(A1, _perm_codomain(A1, (6, 2)); copy = true))
+    L2, = right_orth!(permute(A2, _perm_codomain(A2, (6, 1)); copy = true))
+    @tensor M[-1 -2; -3 -4] := L1[-1 1; -3] * L2[-2 1; -4]
+    L, = right_orth!(M)
+    return L
+end
+function _right_orth_twolayer(A1::PEPOTensor, A2::PEPOTensor)
     MMdag = _get_MMdag(A1, A2)
     D, L = eigh_full!(MMdag)
     # remove small negative eigenvalues due to numerical noises
@@ -101,10 +122,10 @@ Reference: Physical Review B 100, 035449 (2019)
 """
 function virtual_projector(
         A1::PEPOTensor, A2::PEPOTensor, B1::PEPOTensor, B2::PEPOTensor;
-        trunc::TruncationStrategy
+        trunc::TruncationStrategy, layerwise_qr::Bool = false
     )
-    R1 = left_orth_twolayer(A1, A2)
-    R2 = right_orth_twolayer(B1, B2)
+    R1 = left_orth_twolayer(A1, A2; layerwise_qr)
+    R2 = right_orth_twolayer(B1, B2; layerwise_qr)
     u, s, vh, ϵ = svd_trunc!(R1 * R2; trunc)
     sinv_sqrt = sdiag_pow(s, -0.5)
     P1 = R2 * vh' * sinv_sqrt
@@ -119,21 +140,23 @@ Compress two 1-layer iPEPOs into a 1-layer iPEPO by truncating the virtual bonds
 with `LocalTruncation`. In the tuple `(ρ1, ρ2)`, `ρ1` is the lower layer and
 `ρ2` is the upper layer.
 """
-function compress(ρs::Tuple{InfinitePEPO, InfinitePEPO}, alg::LocalTruncation)
+function compress(ρs::Tuple{<:InfinitePEPO, <:InfinitePEPO}, alg::LocalTruncation)
     ρ1, ρ2 = ρs
     # sanity checks
     size(ρ1) == size(ρ2) || error("Input PEPOs have different unit cell sizes.")
     size(ρ1, 3) == 1 || error("ρ1 should have only one layer.")
     size(ρ2, 3) == 1 || error("ρ2 should have only one layer.")
-    all(all.(_check_virtual_dualness(ρ1))) || error("East and north virtual spaces in ρ1 should be dual spaces.")
-    all(all.(_check_virtual_dualness(ρ2))) || error("East and north virtual spaces in ρ2 should be dual spaces.")
+    all(all.(_check_virtual_dualness(ρ1))) ||
+        error("East and north virtual spaces in ρ1 should be dual spaces.")
+    all(all.(_check_virtual_dualness(ρ2))) ||
+        error("East and north virtual spaces in ρ2 should be dual spaces.")
     # x-bond projectors: [r, c] on bond [r, c]--[r, c+1]
     Nr, Nc, = size(ρ1)
     Pxs_info = map(Iterators.product(1:Nr, 1:Nc)) do (r, c)
         # TODO: support SiteDependentTruncation
         return virtual_projector(
             ρ1[r, c], ρ2[r, c], ρ1[r, _next(c, Nc)], ρ2[r, _next(c, Nc)];
-            trunc = alg.trunc
+            trunc = alg.trunc, layerwise_qr = alg.layerwise_qr
         )
     end
     # y-bond projectors: [r, c] on bond [r, c]--[r-1, c]
@@ -141,7 +164,7 @@ function compress(ρs::Tuple{InfinitePEPO, InfinitePEPO}, alg::LocalTruncation)
     Pys_info = map(Iterators.product(1:Nr, 1:Nc)) do (r, c)
         return virtual_projector(
             ρ1′[r, c], ρ2′[r, c], ρ1′[_prev(r, Nr), c], ρ2′[_prev(r, Nr), c];
-            trunc = alg.trunc
+            trunc = alg.trunc, layerwise_qr = alg.layerwise_qr
         )
     end
     # apply projectors

@@ -207,3 +207,19 @@ function _permute_to_last(axes::NTuple{N, Int}, ax::Int) where {N}
     new_axes = (ntuple(i -> axes[biperm[1][i]], N - 1)..., ax)
     return new_axes, biperm
 end
+
+"""
+    _tuplediff(p::NTuple{M, T}, pall::NTuple{N, T}) where {M, N, T <: Integer}
+
+Return the tuple obtained by removing the entries of `p` from `pall`.
+Assumes that both tuples contain unique entries and that `p` is a subset of `pall`.
+"""
+function _tuplediff(
+        p::NTuple{M, T}, pall::NTuple{N, T}
+    )::NTuple{N - M, T} where {M, N, T <: Integer}
+    return Tuple(x for x in pall if x ∉ p)
+end
+"Return the permutation to make legs `p` as the codomain of `T`."
+_perm_codomain(T::AbstractTensorMap, p::Tuple) = (p, _tuplediff(p, allind(T)))
+"Return the permutation to make legs `p` as the domain of `T`."
+_perm_domain(T::AbstractTensorMap, p::Tuple) = (_tuplediff(p, allind(T)), p)

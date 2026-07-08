@@ -7,13 +7,14 @@ using PEPSKit: virtual_projector
 
 """
 Cost function of LocalTruncation.
-For test convenience, open virtual indices are made trivial and removed.
+For test convenience, open virtual indices except
+east/west legs are made trivial and removed.
 """
 function localcompress_cost(A1, A2, B1, B2, P1, P2)
-    @tensor net1[pa1 pb1; pa2′ pb2′] :=
-        A1[pa1 pa; D1] * A2[pa pa2′; D2] * B1[pb1 pb; D1] * B2[pb pb2′; D2]
-    @tensor net2[pa1 pb1; pa2′ pb2′] := P1[Da1 Da2; D] * P2[D; Db1 Db2] *
-        A1[pa1 pa; Da1] * A2[pa pa2′; Da2] * B1[pb1 pb; Db1] * B2[pb pb2′; Db2]
+    @tensor net1[pa1 pb1 Dw1 Dw2; pa2′ pb2′ De1 De2] :=
+        A1[pa1 pa; D1 Dw1] * A2[pa pa2′; D2 Dw2] * B1[pb1 pb; De1 D1] * B2[pb pb2′; De2 D2]
+    @tensor net2[pa1 pb1 Dw1 Dw2; pa2′ pb2′ De1 De2] := P1[Da1 Da2; D] * P2[D; Db1 Db2] *
+        A1[pa1 pa; Da1 Dw1] * A2[pa pa2′; Da2 Dw2] * B1[pb1 pb; De1 Db1] * B2[pb pb2′; De2 Db2]
     return norm(net1 - net2)
 end
 
@@ -32,22 +33,30 @@ end
 
 @testset "Cost function of LocalTruncation" begin
     Random.seed!(0)
-    Vaux, Vphy, V = ℂ^1, ℂ^10, ℂ^4
-    A1 = normalize(randn(Vphy ⊗ Vphy' ← Vaux ⊗ V ⊗ Vaux' ⊗ Vaux'), Inf)
-    A2 = normalize(randn(Vphy ⊗ Vphy' ← Vaux ⊗ V ⊗ Vaux' ⊗ Vaux'), Inf)
-    B1 = normalize(randn(Vphy ⊗ Vphy' ← Vaux ⊗ Vaux ⊗ Vaux' ⊗ V'), Inf)
-    B2 = normalize(randn(Vphy ⊗ Vphy' ← Vaux ⊗ Vaux ⊗ Vaux' ⊗ V'), Inf)
+    Vaux, Vvir, Vphy, V = ℂ^1, ℂ^4, ℂ^3, ℂ^4
+    A1 = normalize(randn(Vphy ⊗ Vphy' ← Vaux ⊗ V ⊗ Vaux' ⊗ Vvir'), Inf)
+    A2 = normalize(randn(Vphy ⊗ Vphy' ← Vaux ⊗ V ⊗ Vaux' ⊗ Vvir'), Inf)
+    B1 = normalize(randn(Vphy ⊗ Vphy' ← Vaux ⊗ Vvir ⊗ Vaux' ⊗ V'), Inf)
+    B2 = normalize(randn(Vphy ⊗ Vphy' ← Vaux ⊗ Vvir ⊗ Vaux' ⊗ V'), Inf)
 
-    P1, P2, info = virtual_projector(A1, A2, B1, B2; trunc = notrunc())
-    @test P1 * P2 ≈ TensorKit.id(domain(P2))
+    errs = map((false, true)) do layerwise_qr
+        for _ in 1:5
+            @time P1, P2, info = virtual_projector(A1, A2, B1, B2; trunc = notrunc(), layerwise_qr)
+        end
+        @test P1 * P2 ≈ TensorKit.id(domain(P2))
 
-    P1, P2, info = virtual_projector(A1, A2, B1, B2; trunc = truncrank(8))
-    A1 = removeunit(removeunit(removeunit(A1, 6), 5), 3)
-    A2 = removeunit(removeunit(removeunit(A2, 6), 5), 3)
-    B1 = removeunit(removeunit(removeunit(B1, 5), 4), 3)
-    B2 = removeunit(removeunit(removeunit(B2, 5), 4), 3)
-    @info "Truncation error = $(info.ϵ)."
-    @test info.ϵ ≈ localcompress_cost(A1, A2, B1, B2, P1, P2)
+        P1, P2, info = virtual_projector(A1, A2, B1, B2; trunc = truncrank(8), layerwise_qr)
+        # keep west virtual leg
+        A1′ = removeunit(removeunit(A1, 5), 3)
+        A2′ = removeunit(removeunit(A2, 5), 3)
+        # keep east virtual leg
+        B1′ = removeunit(removeunit(B1, 5), 3)
+        B2′ = removeunit(removeunit(B2, 5), 3)
+        err = info.ϵ
+        @info "Truncation error = $(err)."
+        @test err ≈ localcompress_cost(A1′, A2′, B1′, B2′, P1, P2)
+        return err
+    end
 end
 
 @testset "Virtual space matching" begin
@@ -55,7 +64,9 @@ end
     Vns = ComplexSpace.([2 4; 5 3])
     Ves = ComplexSpace.([3 5; 4 2])
     ρ = InfinitePEPO(randn, ComplexF64, Vps, Vns, Ves)
-    alg = LocalTruncation(truncrank(2))
-    ρ2, = compress((ρ, ρ), alg)
-    @test ρ2 isa InfinitePEPO
+    for layerwise_qr in (false, true)
+        alg = LocalTruncation(; trunc = truncrank(2), layerwise_qr)
+        ρ2, = compress((ρ, ρ), alg)
+        @test ρ2 isa InfinitePEPO
+    end
 end
