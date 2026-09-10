@@ -32,8 +32,12 @@ _set_decomposition_truncation(alg::C4vQRProjector, ::TruncationStrategy) = alg
 
 """
 Compute the column-enlarged northwest corner for C₄ᵥ QR-CTMRG.
+```
+    C-←-E-←-
+    ↓   |   
+```
 """
-function c4v_enlarge(env, ::C4vQRProjector)
+function c4v_enlarge(network, env, ::C4vQRProjector)
     return TensorMap(ColumnEnlargedCorner(env, (NORTHWEST, 1, 1)))
 end
 
@@ -49,53 +53,5 @@ Compute the C₄ᵥ projector by decomposing the column-enlarged corner with `le
 function c4v_projector!(enlarged_corner, alg::C4vQRProjector)
     Q, R = left_orth!(enlarged_corner, decomposition_algorithm(alg))
     # TODO: what's a meaningful way to compute a truncation error/condition number in this scheme?
-    return Q, (; Q, R, truncation_error = zero(scalartype(Q)))
-end
-
-"""
-Renormalize the single corner tensor
-```
-    C-←-E-←-|~~~|
-    |   |   | P |-←-
-    E---A---|~~~|
-    |   |
-    [~P']
-      ↓
-```
-Using the already calculated QR decomposition
-```
-                   R--←--
-                   ↓
-    C-←-E-←-  =  [~P~]
-    ↓   |        ↓   |
-```
-we rewrite the renormalized corner as
-```
-    R-←-|~~~|
-    ↓   | P |-←-
-    E′--|~~~|
-    ↓
-```
-which reuses the renormalized edge `E′` (`new_edge`).
-(Credit: https://github.com/qiyang-ustc/QRCTM/blob/dd160116c3d7b02076691ceaf0a9833511ae532d/heisenberg.py#L80)
-"""
-# TODO: possible missing twists for fermions
-function c4v_qr_renormalize_corner(new_edge::CTMRGEdgeTensor, projector, R)
-    # contract edge and R
-    edge′ = physical_flip(new_edge)
-    ER = edge′ * twistdual(R, 1)
-    # contract (edge, R) with projector
-    new_corner = contract_edges(ER, projector)
-    new_corner = project_hermitian(new_corner)
-    return new_corner / norm(new_corner)
-end
-
-"""Contract two CTMRG edge tensors into a corner tensor."""
-@generated function contract_edges(
-        EL::CTMRGEdgeTensor{T, S, N}, ER::CTMRGEdgeTensor{T, S, N}
-    ) where {T, S, N}
-    C´_e = tensorexpr(:C´, -1, -2)
-    EL_e = tensorexpr(:EL, (-1, (2:N)...), 1)
-    ER_e = tensorexpr(:ER, 1:N, -2)
-    return macroexpand(@__MODULE__, :(return @tensor $C´_e := $EL_e * $ER_e))
+    return Q, (; contraction_metrics = (;), Q, R)
 end

@@ -84,38 +84,22 @@ the corners are identical, and the edges have identical singular values.
 convergence_tensors(env::CTMRGEnv, ::C4vCTMRG) =
     (view(env.corners, 1:1, :, :), view(env.edges, 1:1, :, :))
 
-function ctmrg_iteration(network, env::CTMRGEnv, ::C4vCTMRG{P}) where {P}
-    throw(ArgumentError("Unknown C4v projector algorithm $P"))
-end
-function ctmrg_iteration(
-        network,
-        env::CTMRGEnv,
-        alg::C4vCTMRG{<:C4vEighProjector},
-    )
-    enlarged_corner = c4v_enlarge(network, env, alg.projector_alg)
-    corner′, projector, info = c4v_projector!(enlarged_corner, alg.projector_alg)
+function ctmrg_iteration(network, env::CTMRGEnv, alg::C4vCTMRG)
+    projector_alg = alg.projector_alg
+    enlarged_corner = c4v_enlarge(network, env, projector_alg)
+    projector, info = c4v_projector!(enlarged_corner, projector_alg)
     edge′ = c4v_renormalize_edge(network, env, projector)
-    info = (;
-        contraction_metrics = (; info.truncation_error),
-        info.D, info.V,
-    )
-    return CTMRGEnv(corner′, edge′), info
-end
-function ctmrg_iteration(
-        network,
-        env::CTMRGEnv,
-        alg::C4vCTMRG{<:C4vQRProjector},
-    )
-    enlarged_corner = c4v_enlarge(env, alg.projector_alg)
-    projector, info = c4v_projector!(enlarged_corner, alg.projector_alg)
-    edge′ = c4v_renormalize_edge(network, env, projector)
-    corner′ = c4v_qr_renormalize_corner(edge′, projector, info.R)
-    info = (; contraction_metrics = (;), info.Q, info.R)
+    corner′ = c4v_renormalize_corner(edge′, projector, info, projector_alg)
     return CTMRGEnv(corner′, edge′), info
 end
 
+"""Report unsupported projector algorithms when enlarging a C₄ᵥ corner."""
+function c4v_enlarge(network, env, alg::ProjectorAlgorithm)
+    throw(ArgumentError("Unknown C4v projector algorithm $(typeof(alg))"))
+end
+
 """
-Renormalize the single edge tensor.
+Renormalize the single C₄ᵥ edge tensor.
 ```
         |~~~|-←-E-←-|~~~|
     -←--| P'|   |   | P |--←-
@@ -123,12 +107,66 @@ Renormalize the single edge tensor.
                 |
 ```
 """
-# TODO: possible missing twists for fermions
 function c4v_renormalize_edge(network, env, projector)
+    # TODO: possible missing twists for fermions
     new_edge = renormalize_north_edge(env.edges[1], projector, projector', network[1, 1])
     # additional Hermitian projection step for numerical stability
     new_edge = _project_hermitian(new_edge)
     return new_edge / norm(new_edge)
+end
+
+"""
+Renormalize the single C₄ᵥ corner tensor.
+```
+    C-←-E-←-|~~~|
+    |   |   | P |-←-
+    E---A---|~~~|
+    |   |
+    [~P']
+    ↓
+```
+
+For `C4vEighProjector`, it is already given by truncated eigenvalues of the enlarged corner.
+
+For `C4vQRProjector`, we can use the already calculated QR decomposition
+```
+                   R--←--
+                   ↓
+    C-←-E-←-  =  [~P~]
+    ↓   |        ↓   |
+```
+to rewrite the renormalized corner as
+```
+    R-←-|~~~|
+    ↓   | P |-←-
+    E′--|~~~|
+    ↓
+```
+which reuses the renormalized edge `E′` (`new_edge`).
+(Credit: https://github.com/qiyang-ustc/QRCTM/blob/dd160116c3d7b02076691ceaf0a9833511ae532d/heisenberg.py#L80)
+"""
+function c4v_renormalize_corner(new_edge::CTMRGEdgeTensor, projector, info, ::C4vEighProjector)
+    return info.D / norm(info.D)
+end
+function c4v_renormalize_corner(new_edge::CTMRGEdgeTensor, projector, info, ::C4vQRProjector)
+    # TODO: possible missing twists for fermions
+    # contract updated edge and R
+    edge′ = physical_flip(new_edge)
+    ER = edge′ * twistdual(info.R, 1)
+    # contract (edge′, R) with projector
+    new_corner = contract_edges(ER, projector)
+    new_corner = project_hermitian(new_corner)
+    return new_corner / norm(new_corner)
+end
+
+"""Contract two CTMRG edge tensors into a corner tensor."""
+@generated function contract_edges(
+        EL::CTMRGEdgeTensor{T, S, N}, ER::CTMRGEdgeTensor{T, S, N}
+    ) where {T, S, N}
+    C´_e = tensorexpr(:C´, -1, -2)
+    EL_e = tensorexpr(:EL, (-1, (2:N)...), 1)
+    ER_e = tensorexpr(:ER, 1:N, -2)
+    return macroexpand(@__MODULE__, :(return @tensor $C´_e := $EL_e * $ER_e))
 end
 
 # TODO: this should eventually be the constructor for a new C4vCTMRGEnv type

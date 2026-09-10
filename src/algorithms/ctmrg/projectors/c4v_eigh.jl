@@ -37,17 +37,22 @@ PROJECTOR_SYMBOLS[:C4vEighProjector] = C4vEighProjector
 
 """
 Compute the normalized and Hermitian-symmetrized C₄ᵥ enlarged corner.
+```
+    C-←-E-←-
+    |   |   
+    E---A---
+    |   |
+```
 """
 function c4v_enlarge(network, env, ::C4vEighProjector)
     enlarged_corner = TensorMap(EnlargedCorner(network, env, (NORTHWEST, 1, 1)))
-    # TODO: replace by `project_hermitian`
-    enlarged_corner = 0.5 * (enlarged_corner + enlarged_corner')
+    enlarged_corner = project_hermitian(enlarged_corner)
     return enlarged_corner / norm(enlarged_corner)
 end
 
 """
 Compute the C₄ᵥ projector from `eigh` decomposing the Hermitian `enlarged_corner`.
-Also return the normalized eigenvalues as the new corner tensor.
+Return the projector and decomposition diagnostics used to renormalize the corner.
 """
 function c4v_projector!(enlarged_corner, alg::C4vEighProjector)
     alg = _set_decomposition_truncation(alg, truncation_strategy(alg, enlarged_corner))
@@ -63,5 +68,5 @@ function c4v_projector!(enlarged_corner, alg::C4vEighProjector)
         end
     end
 
-    return D / norm(D), V, (; D, V, truncation_error)
+    return V, (; contraction_metrics = (; truncation_error), D, V)
 end
