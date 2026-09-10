@@ -36,75 +36,6 @@ function C4vCTMRG(; kwargs...)
 end
 CTMRG_SYMBOLS[:C4vCTMRG] = C4vCTMRG
 
-"""
-$(TYPEDEF)
-
-Projector algorithm implementing the `eigh` decomposition of a Hermitian enlarged corner.
-
-## Fields
-
-$(TYPEDFIELDS)
-
-## Constructors
-
-    C4vEighProjector(; kwargs...)
-
-Construct the C₄ᵥ `eigh`-based projector algorithm based on the following keyword arguments:
-
-* `decomposition_alg::Union{<:EighAdjoint,NamedTuple}=EighAdjoint()` : `eigh` algorithm including the reverse rule. See [`EighAdjoint`](@ref).
-* `trunc::Union{TruncationStrategy,NamedTuple}=(; alg::Symbol=:$(Defaults.trunc))` : Truncation strategy for the projector computation, which controls the resulting virtual spaces. Here, `alg` can be one of the following:
-    - `:FixedSpaceTruncation` : Keep virtual spaces fixed during projection
-    - `:notrunc` : No singular values are truncated and the performed SVDs are exact
-    - `:truncerror` : Additionally supply error threshold `η`; truncate to the maximal virtual dimension of `η`
-    - `:truncrank` : Additionally supply truncation dimension `η`; truncate such that the 2-norm of the truncated values is smaller than `η`
-    - `:truncspace` : Additionally supply truncation space `η`; truncate according to the supplied vector space 
-    - `:trunctol` : Additionally supply singular value cutoff `η`; truncate such that every retained singular value is larger than `η`
-* `verbosity::Int=$(Defaults.projector_verbosity)` : Projector output verbosity which can be:
-    0. Suppress output information
-    1. Print singular value degeneracy warnings
-"""
-struct C4vEighProjector{S <: EighAdjoint, T} <: ProjectorAlgorithm
-    decomposition_alg::S
-    trunc::T
-    verbosity::Int
-end
-function C4vEighProjector(; kwargs...)
-    return ProjectorAlgorithm(; alg = :C4vEighProjector, kwargs...)
-end
-PROJECTOR_SYMBOLS[:C4vEighProjector] = C4vEighProjector
-
-"""
-$(TYPEDEF)
-
-Projector algorithm implementing the `qr` decomposition of a column-enlarged corner.
-
-## Fields
-
-$(TYPEDFIELDS)
-
-## Constructors
-
-    C4vQRProjector(; kwargs...)
-
-Construct the C₄ᵥ `qr`-based projector algorithm based on the following keyword arguments:
-
-* `decomposition_alg=QRAdjoint()` : `left_orth` algorithm including the reverse rule. See [`QRAdjoint`](@ref).
-"""
-struct C4vQRProjector{S} <: ProjectorAlgorithm
-    # TODO: support all `left_orth` algorithms
-    decomposition_alg::S
-end
-function C4vQRProjector(; kwargs...)
-    return ProjectorAlgorithm(; alg = :C4vQRProjector, kwargs...)
-end
-PROJECTOR_SYMBOLS[:C4vQRProjector] = C4vQRProjector
-
-decomposition_algorithm(alg::C4vQRProjector) = alg.decomposition_alg
-
-# no truncation
-_set_truncation(alg::C4vQRProjector, ::TruncationStrategy) = alg
-_set_decomposition_truncation(alg::C4vQRProjector, ::TruncationStrategy) = alg
-
 function check_input(
         ::typeof(leading_boundary), network::InfiniteSquareNetwork, env::CTMRGEnv, alg::C4vCTMRG; atol = 1.0e-10
     )
@@ -184,67 +115,6 @@ function ctmrg_iteration(
 end
 
 """
-    c4v_enlarge(network, env, ::C4vEighProjector)
-
-Compute the normalized and Hermitian-symmetrized C₄ᵥ enlarged corner.
-"""
-function c4v_enlarge(network, env, ::C4vEighProjector)
-    enlarged_corner = TensorMap(EnlargedCorner(network, env, (NORTHWEST, 1, 1)))
-    # TODO: replace by `project_hermitian`
-    enlarged_corner = 0.5 * (enlarged_corner + enlarged_corner')
-    return enlarged_corner / norm(enlarged_corner)
-end
-"""
-    c4v_enlarge(env, ::C4vQRProjector)
-
-Compute the normalized column-enlarged northeast corner for C₄ᵥ QR-CTMRG.
-"""
-function c4v_enlarge(env, ::C4vQRProjector)
-    return TensorMap(ColumnEnlargedCorner(env, (NORTHWEST, 1, 1)))
-end
-
-"""
-    c4v_projector!(enlarged_corner, alg::C4vEighProjector)
-
-Compute the C₄ᵥ projector from `eigh` decomposing the Hermitian `enlarged_corner`.
-Also return the normalized eigenvalues as the new corner tensor.
-"""
-function c4v_projector!(enlarged_corner, alg::C4vEighProjector)
-    alg = _set_decomposition_truncation(alg, truncation_strategy(alg, enlarged_corner))
-    eigh_alg = decomposition_algorithm(alg)
-
-    D, V, truncation_error = eigh_trunc!(enlarged_corner, eigh_alg)
-
-    # Check for degenerate eigenvalues
-    Zygote.isderiving() && ignore_derivatives() do
-        if alg.verbosity > 0 && is_degenerate_spectrum(D)
-            vals = TensorKit.SectorDict(c => diag(b) for (c, b) in blocks(D))
-            @warn("degenerate eigenvalues detected: ", vals)
-        end
-    end
-
-    return D / norm(D), V, (; D, V, truncation_error)
-end
-"""
-    c4v_projector!(enlarged_corner, alg::C4vQRProjector)
-
-Compute the C₄ᵥ projector by decomposing the column-enlarged corner with `left_orth`.
-```
-                   R--←--
-                   ↓
-    C-←-E-←-  =  [~Q~]    
-    ↓   |        ↓   |
-```
-"""
-function c4v_projector!(enlarged_corner, alg::C4vQRProjector)
-    Q, R = left_orth!(enlarged_corner, decomposition_algorithm(alg))
-    # TODO: what's a meaningful way to compute a truncation error/condition number in this scheme?
-    return Q, (; Q, R, truncation_error = zero(scalartype(Q)))
-end
-
-"""
-    c4v_renormalize_edge(network, env, projector)
-
 Renormalize the single edge tensor.
 ```
         |~~~|-←-E-←-|~~~|
@@ -259,56 +129,6 @@ function c4v_renormalize_edge(network, env, projector)
     # additional Hermitian projection step for numerical stability
     new_edge = _project_hermitian(new_edge)
     return new_edge / norm(new_edge)
-end
-
-"""
-    c4v_qr_renormalize_corner(new_edge, projector, R)
-
-Renormalize the single corner tensor
-```
-    C-←-E-←-|~~~|
-    |   |   | P |-←-
-    E---A---|~~~|
-    |   |
-    [~P']
-      ↓
-```
-Using the already calculated QR decomposition
-```
-                   R--←--
-                   ↓
-    C-←-E-←-  =  [~P~]    
-    ↓   |        ↓   |
-```
-we rewrite the renormalized corner as
-```
-    R-←-|~~~|
-    ↓   | P |-←-
-    E′--|~~~|
-    ↓
-```
-which reuses the renormalized edge `E′` (`new_edge`).
-(Credit: https://github.com/qiyang-ustc/QRCTM/blob/dd160116c3d7b02076691ceaf0a9833511ae532d/heisenberg.py#L80)
-"""
-# TODO: possible missing twists for fermions
-function c4v_qr_renormalize_corner(new_edge::CTMRGEdgeTensor, projector, R)
-    # contract edge and R
-    edge′ = physical_flip(new_edge)
-    ER = edge′ * twistdual(R, 1)
-    # contract (edge, R) with projector
-    new_corner = contract_edges(ER, projector)
-    new_corner = project_hermitian(new_corner)
-    return new_corner / norm(new_corner)
-end
-
-# auxilary function: contract two CTMRG edge tensors
-@generated function contract_edges(
-        EL::CTMRGEdgeTensor{T, S, N}, ER::CTMRGEdgeTensor{T, S, N}
-    ) where {T, S, N}
-    C´_e = tensorexpr(:C´, -1, -2)
-    EL_e = tensorexpr(:EL, (-1, (2:N)...), 1)
-    ER_e = tensorexpr(:ER, 1:N, -2)
-    return macroexpand(@__MODULE__, :(return @tensor $C´_e := $EL_e * $ER_e))
 end
 
 # TODO: this should eventually be the constructor for a new C4vCTMRGEnv type

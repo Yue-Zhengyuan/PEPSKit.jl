@@ -120,6 +120,8 @@ include("algorithms/ctmrg/projectors/fullinfinite.jl")
 include("algorithms/ctmrg/simultaneous.jl")
 include("algorithms/ctmrg/sequential.jl")
 include("algorithms/ctmrg/gaugefix.jl")
+include("algorithms/ctmrg/projectors_c4v/eigh.jl")
+include("algorithms/ctmrg/projectors_c4v/qr.jl")
 include("algorithms/ctmrg/c4v.jl")
 include("algorithms/ctmrg/initialization.jl")
 
