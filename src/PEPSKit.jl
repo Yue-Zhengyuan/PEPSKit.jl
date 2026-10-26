@@ -142,6 +142,7 @@ include("algorithms/ctmrg/projectors/c4v_qr.jl")
 include("algorithms/ctmrg/simultaneous.jl")
 include("algorithms/ctmrg/sequential.jl")
 include("algorithms/ctmrg/split.jl")
+include("algorithms/ctmrg/simultaneous_split.jl")
 include("algorithms/ctmrg/gaugefix.jl")
 include("algorithms/ctmrg/gaugefix_split.jl")
 include("algorithms/ctmrg/c4v.jl")
@@ -185,7 +186,7 @@ using .Defaults: set_scheduler!
 export set_scheduler!
 export EighAdjoint, IterEigh, SVDAdjoint, IterSVD, OrthAdjoint, QRAdjoint, LQAdjoint
 export CTMRGEnv, SequentialCTMRG, SimultaneousCTMRG
-export SplitCTMRGEnv, SplitCTMRG
+export SplitCTMRGEnv, SplitCTMRG, SimultaneousSplitCTMRG
 export initialize_ctmrg_environment,
     RandomInitialization, ProductStateInitialization, ApplicationInitialization, IdentityInitialization
 export corner, edge, setcorner!, setedge!

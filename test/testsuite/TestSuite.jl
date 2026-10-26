@@ -85,7 +85,7 @@ using .CompressLocal
 # -----
 module CTMRGSplit
     include("ctmrg/split.jl")
-    export ctmrg_split_projectors, ctmrg_split_compression, ctmrg_split_fishman_cutoff
+    export ctmrg_simultaneous_split, ctmrg_split_projectors, ctmrg_split_compression, ctmrg_split_fishman_cutoff
     export ctmrg_split_environment, ctmrg_split_unitcell, ctmrg_split_expectation_values
 end
 using .CTMRGSplit

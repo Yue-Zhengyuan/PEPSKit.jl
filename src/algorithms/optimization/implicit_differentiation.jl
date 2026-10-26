@@ -211,7 +211,7 @@ function _set_fixed_truncation(alg::CTMRGAlgorithm)
 end
 
 """Freeze both outer and interlayer spaces in the split fixed-point iteration."""
-function _set_fixed_truncation(alg::SplitCTMRG)
+function _set_fixed_truncation(alg::AbstractSplitCTMRG)
     alg_fixed = @set alg.projector_alg = _set_truncation(alg.projector_alg, FixedSpaceTruncation())
     return @set alg_fixed.interlayer_trunc = FixedSpaceTruncation()
 end
@@ -232,7 +232,7 @@ function _fixedpoint_vjp(config::RuleConfig, state, env, alg::CTMRGAlgorithm)
 end
 
 """Reuse the tracked split sweep for gauge selection and compose its phase pullback."""
-function _fixedpoint_vjp(config::RuleConfig, state, env::SplitCTMRGEnv, alg::SplitCTMRG)
+function _fixedpoint_vjp(config::RuleConfig, state, env::SplitCTMRGEnv, alg::AbstractSplitCTMRG)
     alg_fixed = _set_fixed_truncation(alg)
     iteration(A, x) = ctmrg_iteration(InfiniteSquareNetwork(A), x, alg_fixed)
     (env_conv, info), sweep_vjp = rrule_via_ad(config, iteration, state, env)
@@ -473,8 +473,8 @@ function _check_algorithm_combination(::SequentialCTMRG, ::ImplicitGradient)
           SimultaneousCTMRG instead to use :ImplicitGradient"
     throw(ArgumentError(msg))
 end
-function _check_algorithm_combination(::SplitCTMRG, ::ImplicitGradient)
-    throw(ArgumentError("SplitCTMRG supports FixedPointGradient; ImplicitGradient is not implemented."))
+function _check_algorithm_combination(::AbstractSplitCTMRG, ::ImplicitGradient)
+    throw(ArgumentError("Split CTMRG supports FixedPointGradient; ImplicitGradient is not implemented."))
 end
 
 function _check_algorithm_combination(::SimultaneousCTMRG{<:FullInfiniteProjector}, ::ImplicitGradient)

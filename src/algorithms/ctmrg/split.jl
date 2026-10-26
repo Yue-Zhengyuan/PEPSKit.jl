@@ -1,3 +1,6 @@
+"""CTMRG algorithms using split ket and bra boundary factors."""
+abstract type AbstractSplitCTMRG <: CTMRGAlgorithm end
+
 """
     SplitCTMRG(; kwargs...)
 
@@ -9,7 +12,7 @@ Uses [`SplitProjector`](@ref) to construct the split projector pairs.
 All four projector types use the square-root factorization of [Fishman et al.](@cite fishman_faster_2018), Appendix A, for numerical stability.
 The fixed-point gradient aligns the outer and interlayer gauges and holds both environment spaces fixed.
 """
-struct SplitCTMRG{P <: SplitProjector, I <: TruncationStrategy} <: CTMRGAlgorithm
+struct SplitCTMRG{P <: SplitProjector, I <: TruncationStrategy} <: AbstractSplitCTMRG
     tol::Float64
     maxiter::Int
     miniter::Int
@@ -21,12 +24,12 @@ SplitCTMRG(; kwargs...) = CTMRGAlgorithm(; alg = :SplitCTMRG, kwargs...)::SplitC
 CTMRG_SYMBOLS[:SplitCTMRG] = SplitCTMRG
 
 function check_input(::typeof(leading_boundary), network, env::SplitCTMRGEnv, alg::CTMRGAlgorithm)
-    alg isa SplitCTMRG || throw(ArgumentError("SplitCTMRGEnv requires SplitCTMRG."))
-    eltype(network) <: PEPSSandwich || throw(ArgumentError("SplitCTMRG currently supports PEPS overlap networks only."))
+    alg isa AbstractSplitCTMRG || throw(ArgumentError("SplitCTMRGEnv requires a split-CTMRG algorithm."))
+    eltype(network) <: PEPSSandwich || throw(ArgumentError("Split CTMRG currently supports PEPS overlap networks only."))
     size(env)[2:3] == size(network) || throw(DimensionMismatch("Network and environment unit cells must match."))
     env.ket_first == (true, true, false, false) || throw(
         ArgumentError(
-            "SplitCTMRG requires ket_first == (true, true, false, false); got $(env.ket_first). " *
+            "Split CTMRG requires ket_first == (true, true, false, false); got $(env.ket_first). " *
                 "For a rotated standard environment, apply the same rotl90, rotr90, or rot180 transformation " *
                 "to both the environment and the PEPS state/network to restore this orientation before calling " *
                 "`leading_boundary`, then rotate the returned environment back."
@@ -35,8 +38,8 @@ function check_input(::typeof(leading_boundary), network, env::SplitCTMRGEnv, al
     alg.maxiter > 0 || throw(ArgumentError("maxiter must be positive."))
     return nothing
 end
-function check_input(::typeof(leading_boundary), network, env::CTMRGEnv, alg::SplitCTMRG)
-    throw(ArgumentError("SplitCTMRG requires a SplitCTMRGEnv; convert the initial environment first."))
+function check_input(::typeof(leading_boundary), network, env::CTMRGEnv, alg::AbstractSplitCTMRG)
+    throw(ArgumentError("Split CTMRG requires a SplitCTMRGEnv; convert the initial environment first."))
 end
 
 function convergence_tensors(env::SplitCTMRGEnv, alg)

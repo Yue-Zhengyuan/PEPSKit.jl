@@ -55,8 +55,9 @@ function _split_gradient_inputs(AT)
 end
 
 function gradients_split_sweep(AT)
-    return @testset "Split sweep pullback ($AT)" begin
-        psi, env, H, alg = _split_gradient_inputs(AT)
+    return @testset "Split sweep pullback ($AT, $Algorithm)" for Algorithm in (SplitCTMRG, SimultaneousSplitCTMRG)
+        psi, env, H, _ = _split_gradient_inputs(AT)
+        alg = Algorithm(; verbosity = 0)
         loss(A, x) = real(expectation_value(A, H, ctmrg_iteration(InfiniteSquareNetwork(A), x, alg)[1]))
         _, back = Zygote.pullback(loss, psi, env)
         dpsi, denv = back(1.0)

@@ -16,7 +16,7 @@ parent_alg(alg::DynamicTol) = parent_alg(alg.alg)
 
 """Construct a gradient algorithm with split-CTMRG solver defaults, preserving explicit choices."""
 function _gradient_algorithm(gradient_alg, boundary_alg)
-    if boundary_alg isa SplitCTMRG && gradient_alg isa NamedTuple &&
+    if boundary_alg isa AbstractSplitCTMRG && gradient_alg isa NamedTuple &&
             get(gradient_alg, :alg, Defaults.gradient_alg) === :FixedPointGradient
         solver_alg = get(gradient_alg, :solver_alg, (;))
         if solver_alg isa NamedTuple
@@ -173,6 +173,6 @@ function select_algorithm(
 end
 
 function select_algorithm(::typeof(leading_boundary), env₀::SplitCTMRGEnv; alg = :SplitCTMRG, kwargs...)
-    alg === :SplitCTMRG || throw(ArgumentError("SplitCTMRGEnv requires SplitCTMRG."))
-    return SplitCTMRG(; kwargs...)
+    alg in (:SplitCTMRG, :SimultaneousSplitCTMRG) || throw(ArgumentError("SplitCTMRGEnv requires a split-CTMRG algorithm."))
+    return CTMRGAlgorithm(; alg, kwargs...)
 end

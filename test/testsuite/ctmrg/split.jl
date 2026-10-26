@@ -195,12 +195,49 @@ function ctmrg_split_expectation_values(AT)
             initial, psi, SequentialCTMRG(; verbosity = 0, tol = 1.0e-7, maxiter = 40, projector_alg = :FullInfiniteProjector)::SequentialCTMRG,
         )
         split_initial = SplitCTMRGEnv(initial; trunc = truncspace(chi))
-        split, info = leading_boundary(split_initial, psi; verbosity = 0, tol = 1.0e-7, maxiter = 40)
         @test refinfo.converged
-        @test info.converged
-        joined = CTMRGEnv(split)
-        @test abs(norm(psi, joined)) ≈ abs(norm(psi, reference)) rtol = 1.0e-4
         H = adapt(AT, heisenberg_XYZ(InfiniteSquare()))
-        @test expectation_value(psi, H, joined) ≈ expectation_value(psi, H, reference) atol = 1.0e-4
+        for alg in (:SplitCTMRG, :SimultaneousSplitCTMRG)
+            split, info = leading_boundary(split_initial, psi; alg, verbosity = 0, tol = 1.0e-7, maxiter = 40)
+            @test info.converged
+            joined = CTMRGEnv(split)
+            @test abs(norm(psi, joined)) ≈ abs(norm(psi, reference)) rtol = 1.0e-4
+            @test expectation_value(psi, H, joined) ≈ expectation_value(psi, H, reference) atol = 1.0e-4
+        end
+    end
+end
+
+"""Check simultaneous split updates on a nonuniform cell and against independent frozen left moves."""
+function ctmrg_simultaneous_split(AT)
+    Random.seed!(72894)
+    return @testset "Simultaneous split ($AT)" begin
+        cell = (2, 3)
+        P, N, E = ntuple(_ -> ComplexSpace.(rand(2:3, cell...)), 3)
+        chis = ntuple(_ -> ComplexSpace.(rand(2:3, cell...)), 4)
+        psi = adapt(AT, InfinitePEPS(randn, ComplexF64, P, N, E))
+        env = SplitCTMRGEnv(psi, chis...; interlayer_space = ComplexSpace(2))
+        original = deepcopy(env)
+        network = InfiniteSquareNetwork(psi)
+        alg = SimultaneousSplitCTMRG(; verbosity = 0)
+        final, info = ctmrg_iteration(network, env, alg)
+        @test isfinite(info.contraction_metrics.truncation_error)
+        for field in (:corners, :edges_ket, :edges_bra)
+            @test getproperty(env, field) == getproperty(original, field)
+            @test space.(getproperty(final, field)) == space.(getproperty(env, field))
+            @test all(t -> isfinite(norm(t)), getproperty(final, field))
+        end
+        for dir in 1:4
+            net, initial = PEPSKit._orient_split_move(network, env, dir)
+            _, actual = PEPSKit._orient_split_move(network, final, dir)
+            col = size(net, 2)
+            expected, = PEPSKit.ctmrg_leftmove(col, net, initial, SplitCTMRG(; verbosity = 0))
+            @test all(isapprox.(actual.edges_ket[WEST, :, col], expected.edges_ket[WEST, :, col]))
+            @test all(isapprox.(actual.edges_bra[WEST, :, col], expected.edges_bra[WEST, :, col]))
+        end
+        resized, = ctmrg_iteration(network, env, SimultaneousSplitCTMRG(;
+            verbosity = 0, trunc = truncspace(ComplexSpace(3)), interlayer_trunc = truncspace(ComplexSpace(2)),
+        ))
+        @test all(C -> dim(codomain(C)) == dim(domain(C)) == 3, resized.corners)
+        @test all(K -> dim(codomain(K)[1]) == 2, resized.edges_ket[WEST, :, :])
     end
 end

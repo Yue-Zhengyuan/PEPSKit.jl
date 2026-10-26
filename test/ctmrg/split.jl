@@ -9,5 +9,6 @@ if !is_buildkite
     TestSuite.ctmrg_split_fishman_cutoff(Vector)
     TestSuite.ctmrg_split_environment(Vector)
     TestSuite.ctmrg_split_unitcell(Vector)
+    TestSuite.ctmrg_simultaneous_split(Vector)
     TestSuite.ctmrg_split_expectation_values(Vector)
 end
