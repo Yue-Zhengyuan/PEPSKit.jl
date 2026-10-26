@@ -267,14 +267,17 @@ function fixedpoint(
     peps₀ = peps_normalize(peps₀)
 
     # initialize the preconditioner
-    function precondition(x, g)
-        isnothing(alg.precondition_alg) && return g
-        precondition_alg = adapt_solver(
-            alg.precondition_alg;
-            iter = tracked_finalizer.tol_state.iter, g_global = tracked_finalizer.tol_state.gradnorm
-        )
-        g_prec = peps_precondition(x, g, tracked_finalizer.tol_state, precondition_alg)
-        return peps_project_tangent(g_prec, x[1])
+    precondition = if isnothing(alg.precondition_alg)
+        (_, g) -> g
+    else
+        function (x, g)
+            precondition_alg = adapt_solver(
+                alg.precondition_alg;
+                iter = tracked_finalizer.tol_state.iter, g_global = tracked_finalizer.tol_state.gradnorm
+            )
+            g_prec = peps_precondition(x, g, tracked_finalizer.tol_state, precondition_alg)
+            return peps_project_tangent(g_prec, x[1])
+        end
     end
 
     # optimize operator cost function
@@ -355,12 +358,19 @@ function peps_normalize(A::InfinitePEPS)
     return InfinitePEPS(normalized_tensors)
 end
 
+"""Real part of the Hermitian inner product."""
+real_inner(η₁, η₂) = real(inner(η₁, η₂))
+real_inner(_, η₁, η₂) = real_inner(η₁, η₂)
+
 """
-Project each direction onto the real tangent space of its fixed-norm PEPS tensor without mutating the inputs.
+$(SIGNATURES)
+
+Project each direction onto the tangent space of its fixed-norm PEPS tensor using [`project_tangent`](@ref) with the real part of the Hermitian inner product.
+Complex tensors are treated as a real vector space, retaining the tangent phase direction ``i A``.
 """
 function peps_project_tangent(η::InfinitePEPS, peps::InfinitePEPS)
     tangents = map(unitcell(η), unitcell(peps)) do direction, A
-        return add(direction, A, -real(inner(A, direction)) / real(inner(A, A)))
+        return project_tangent(direction, A; inner = real_inner)
     end
     return InfinitePEPS(tangents)
 end
@@ -376,14 +386,16 @@ and corresponding directional derivative `ξ`,
 ```math
 ξ = \\cos ( α ‖η‖ / ‖A‖ ) η - \\sin ( α ‖η‖ / ‖A‖ ) ‖η‖ A / ‖A‖,
 ```
-such that ``\\operatorname{Re} ⟨ A′, ξ ⟩ = 0`` and ``‖A′‖ = ‖A‖``.
-Each tensor and its direction must satisfy ``\\operatorname{Re} ⟨ A, η ⟩ = 0``.
+such that ``⟨ A′, ξ ⟩ = 0`` and ``‖A′‖ = ‖A‖``.
+Here ``⟨⋅, ⋅⟩`` denotes the real part of the Hermitian inner product, and ``‖⋅‖`` is its induced norm.
+Complex tensors are treated as a real vector space, retaining the tangent phase direction ``i A``.
+Each tensor and its direction must satisfy ``⟨ A, η ⟩ = 0``.
 """
 function peps_retract(x, η, α)
     peps = x[1]
     env = deepcopy(x[2])
 
-    retractions = norm_preserving_retract.(unitcell(peps), unitcell(η), α)
+    retractions = norm_preserving_retract.(unitcell(peps), unitcell(η), α; inner = real_inner)
     peps′ = InfinitePEPS(map(first, retractions))
     ξ = InfinitePEPS(map(last, retractions))
 
@@ -396,28 +408,27 @@ $(SIGNATURES)
 Transports a direction at `A = x[1]` to a valid direction at ``A′ = x′[1]`` corresponding to the norm-preserving retraction of `A` along `η` with step size `α`.
 In particular, starting from a direction `ξ` of the form
 ```math
-ξ = \\operatorname{Re} ⟨ η / ‖η‖, ξ ⟩ η / ‖η‖ + Δξ
+ξ = ⟨ η / ‖η‖, ξ ⟩ η / ‖η‖ + Δξ
 ```
-where ``\\operatorname{Re} ⟨ Δξ, A ⟩ = \\operatorname{Re} ⟨ Δξ, η ⟩ = 0``, it returns
+where ``⟨ Δξ, A ⟩ = ⟨ Δξ, η ⟩ = 0``, it returns
 ```math
-ξ(α) = \\operatorname{Re} ⟨ η / ‖η‖, ξ ⟩ ( \\cos ( α ‖η‖ / ‖A‖ ) η / ‖η‖ - \\sin( α ‖η‖ / ‖A‖ ) A / ‖A‖ ) + Δξ
+ξ(α) = ⟨ η / ‖η‖, ξ ⟩ ( \\cos ( α ‖η‖ / ‖A‖ ) η / ‖η‖ - \\sin( α ‖η‖ / ‖A‖ ) A / ‖A‖ ) + Δξ
 ```
-such that ``‖ξ(α)‖ = ‖ξ‖, \\operatorname{Re} ⟨ A′, ξ(α) ⟩ = 0``.
-Each tensor and its directions `η` and `ξ` must satisfy ``\\operatorname{Re} ⟨ A, η ⟩ = \\operatorname{Re} ⟨ A, ξ ⟩ = 0``.
+such that ``‖ξ(α)‖ = ‖ξ‖, ⟨ A′, ξ(α) ⟩ = 0``.
+Here ``⟨⋅, ⋅⟩`` denotes the real part of the Hermitian inner product, and ``‖⋅‖`` is its induced norm.
+Complex tensors are treated as a real vector space, retaining the tangent phase direction ``i A``.
+Each tensor and its directions `η` and `ξ` must satisfy ``⟨ A, η ⟩ = ⟨ A, ξ ⟩ = 0``.
 """
 function peps_transport!(ξ, x, η, α, x′)
     peps = x[1]
     peps′ = x′[1]
 
     norm_preserving_transport!.(
-        unitcell(ξ), unitcell(peps), unitcell(η), α, unitcell(peps′)
+        unitcell(ξ), unitcell(peps), unitcell(η), α, unitcell(peps′); inner = real_inner
     )
 
     return ξ
 end
-
-# Take real valued part of dot product
-real_inner(_, η₁, η₂) = real(dot(η₁, η₂))
 
 """
     symmetrize_retract_and_finalize!(symm::SymmetrizationStyle, [retract, finalize!])

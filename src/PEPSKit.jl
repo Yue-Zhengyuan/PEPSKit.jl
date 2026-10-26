@@ -62,7 +62,7 @@ include("utility/diffable_threads.jl")
 include("utility/twistdual.jl")
 include("utility/eigh.jl")
 include("utility/svd.jl")
-include("utility/qr.jl")
+include("utility/orth.jl")
 include("utility/lq.jl")
 include("utility/rotations.jl")
 include("utility/hook_pullback.jl")
@@ -82,6 +82,9 @@ include("utility/symmetrization.jl")
 include("operators/infinitepepo.jl")
 include("operators/transfermatrix.jl")
 include("operators/localoperator.jl")
+include("operators/localoperator/dense.jl")
+include("operators/localoperator/tensorproduct.jl")
+include("operators/localoperator/mpo.jl")
 include("operators/localcircuit.jl")
 include("operators/lattices/squarelattice.jl")
 include("operators/models.jl")
@@ -180,7 +183,7 @@ include("algorithms/select_algorithm.jl")
 
 using .Defaults: set_scheduler!
 export set_scheduler!
-export EighAdjoint, IterEigh, SVDAdjoint, IterSVD, QRAdjoint, LQAdjoint
+export EighAdjoint, IterEigh, SVDAdjoint, IterSVD, OrthAdjoint, QRAdjoint, LQAdjoint
 export CTMRGEnv, SequentialCTMRG, SimultaneousCTMRG
 export SplitCTMRGEnv, SplitCTMRG
 export initialize_ctmrg_environment,

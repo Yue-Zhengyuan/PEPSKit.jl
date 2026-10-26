@@ -21,7 +21,7 @@ For a full description, see [`leading_boundary`](@ref). The supported keywords a
 * `miniter::Int=$(Defaults.ctmrg_miniter)`
 * `verbosity::Int=$(Defaults.ctmrg_verbosity)`
 * `trunc::Union{TruncationStrategy,NamedTuple}=(; alg::Symbol=:$(Defaults.trunc))`
-* `decomposition_alg::Union{NamedTuple,<:EighAdjoint,<:QRAdjoint}=(;)`
+* `decomposition_alg::Union{NamedTuple,<:EighAdjoint,<:OrthAdjoint}=(;)`
 * `projector_alg::Symbol=:$(Defaults.projector_alg_c4v)`
 """
 struct C4vCTMRG{P <: ProjectorAlgorithm} <: CTMRGAlgorithm
@@ -71,7 +71,16 @@ end
 # as expensive as `svd_vals` on CPU but much cheaper on GPU, and gives effectively
 # the same information. For the QR projector, off-diagonal elements are still
 # present until CTMRG converges, so we need a fallback for the non-diagonal case.
-corner_spectrum(C::AbstractTensorMap, ::C4vCTMRG) = eigh_vals(C)
+# gauge fix sign of spectrum such that the eigenvalue of largest magnitude is positive
+function corner_spectrum(C::AbstractTensorMap, ::C4vCTMRG)
+    S = eigh_vals(C)
+    if -minimum(S) > maximum(S)
+        for (_, b) in blocks(S)
+            b .= .-reverse(b) # spectrum of -C: negated and, to stay ascending, reversed
+        end
+    end
+    return S
+end
 
 """
     convergence_tensors(env::CTMRGEnv, alg::C4vCTMRG) -> (corners, edges)

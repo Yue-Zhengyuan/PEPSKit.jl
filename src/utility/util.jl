@@ -13,11 +13,13 @@ _safe_pow(a::Number, pow::Real, tol::Real) = (pow < 0 && abs(a) < tol) ? zero(a)
     sdiag_pow(s, pow::Real; tol::Real=eps(real(scalartype(s)))^(3 / 4))
 
 Compute `s^pow` for a diagonal matrix `s`.
+The result preserves the scalar and storage types of `s`.
 """
 function sdiag_pow(s::DiagonalTensorMap, pow::Real; tol::Real = eps(real(scalartype(s)))^(3 / 4))
     # Relative tol w.r.t. largest abs value of `s` (use norm(∘, Inf) to make differentiable)
     tol *= norm(s, Inf)
-    spow = DiagonalTensorMap(_safe_pow.(s.data, pow, tol), space(s, 1))
+    spow = similar(s)
+    spow.data .= _safe_pow.(s.data, pow, tol)
     return spow
 end
 function sdiag_pow(
@@ -43,7 +45,8 @@ function ChainRulesCore.rrule(
     spow_minus1_conj = scale!(sdiag_pow(s', pow - 1; tol), pow)
     function sdiag_pow_pullback(c̄_)
         c̄ = unthunk(c̄_)
-        return (ChainRulesCore.NoTangent(), _elementwise_mult(c̄, spow_minus1_conj))
+        # pow is a fixed algorithm parameter in PEPSKit, so we omit its derivative.
+        return (ChainRulesCore.NoTangent(), _elementwise_mult(c̄, spow_minus1_conj), ChainRulesCore.NoTangent())
     end
     return spow, sdiag_pow_pullback
 end
@@ -77,11 +80,17 @@ end
 function is_degenerate_spectrum(
         S; atol::Real = 0, rtol::Real = atol > 0 ? 0 : sqrt(eps(scalartype(S)))
     )
+    approx = (x, y) -> isapprox(real(x), real(y); atol, rtol)
+    # we need to distinguish vectors in the subspace
+    # to avoid symmetry breaking rotations. vectors in
+    # different blocks are safe.
     for (_, b) in blocks(S)
-        s = real(diag(b))
-        for i in 1:(length(s) - 1)
-            isapprox(s[i], s[i + 1]; atol, rtol) && return true
-        end
+        s = diagview(b)
+        n = length(s)
+        n < 2 && continue
+        left = view(s, 1:(n - 1))
+        right = view(s, 2:n)
+        mapreduce(approx, |, left, right; init = false) && return true
     end
     return false
 end

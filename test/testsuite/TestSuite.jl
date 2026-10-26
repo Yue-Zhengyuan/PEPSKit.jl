@@ -134,6 +134,12 @@ module CTMRGFlavors
 end
 using .CTMRGFlavors
 
+module CTMRGC4vSignBranches
+    include("ctmrg/c4v_sign_branches.jl")
+    export ctmrg_c4v_sign_branches
+end
+using .CTMRGC4vSignBranches
+
 module CTMRGGaugeFix
     include("ctmrg/gaugefix.jl")
     export ctmrg_gaugefix_asymmetric, ctmrg_gaugefix_c4v
@@ -216,6 +222,7 @@ module GradientsSplitCTMRG
 end
 using .GradientsSplitCTMRG
 
+
 # Optimization
 # ------------
 module OptimizationNormPreservation
@@ -266,6 +273,19 @@ module ToolboxDensityMatrices
 end
 using .ToolboxDensityMatrices
 
+module ToolboxTensorProductTerms
+    include("toolbox/tensorproduct_terms.jl")
+    export toolbox_tensorproduct_ising, toolbox_tensorproduct_bookkeeping
+end
+using .ToolboxTensorProductTerms
+
+module ToolboxMPOTerms
+    include("toolbox/mpo_terms.jl")
+    export toolbox_mpo_terms_dense, toolbox_mpo_bookkeeping, toolbox_mpo_validation
+    export toolbox_mpo_pepo
+end
+using .ToolboxMPOTerms
+
 # Utility
 # -------
 module UtilityCorrelator
@@ -292,6 +312,12 @@ module UtilityQRWrapper
     export utility_qr_wrapper
 end
 using .UtilityQRWrapper
+module UtilityOrthWrapper
+    include("utility/orth_wrapper.jl")
+    export utility_orth_wrapper
+end
+using .UtilityOrthWrapper
+
 
 module UtilitySVDWrapper
     include("utility/svd_wrapper.jl")

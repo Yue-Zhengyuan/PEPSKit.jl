@@ -87,8 +87,8 @@ supplied via the keyword arguments or directly as an [`CTMRGAlgorithm`](@ref) st
 * `trunc::Union{TruncationStrategy,NamedTuple}=(; alg::Symbol=:$(Defaults.trunc))` : Truncation strategy for the projector computation, which controls the resulting virtual spaces. Here, `alg` can be one of the following:
     - `:FixedSpaceTruncation` : Keep virtual spaces fixed during projection
     - `:notrunc` : No singular values are truncated and the performed SVDs are exact
-    - `:truncerror` : Additionally supply error threshold `η`; truncate to the maximal virtual dimension of `η`
-    - `:truncrank` : Additionally supply truncation dimension `η`; truncate such that the 2-norm of the truncated values is smaller than `η`
+    - `:truncerror` : Additionally supply error threshold `η`; truncate such that the 2-norm of the truncated values is smaller than `η`
+    - `:truncrank` : Additionally supply truncation dimension `η`; truncate to the maximal virtual dimension of `η`
     - `:truncspace` : Additionally supply truncation space `η`; truncate according to the supplied vector space 
     - `:trunctol` : Additionally supply singular value cutoff `η`; truncate such that every retained singular value is larger than `η`
 * `projector_alg::Symbol=:$(Defaults.projector_alg)` : Variant of the projector algorithm. See also [`ProjectorAlgorithm`](@ref).
@@ -97,11 +97,9 @@ supplied via the keyword arguments or directly as an [`CTMRGAlgorithm`](@ref) st
     - `:SplitProjector` : Split projector pairs constructed via SVDs of their environments, works only for [`SplitCTMRG`](@ref) and is its default.
     - `:C4vEighProjector` : Projection via `eigh` of the Hermitian enlarged corner, works only for [`C4vCTMRG`](@ref).
     - `:C4vQRProjector` : Projection via QR decomposition of the lower-rank column-enlarged corner, works only for [`C4vCTMRG`](@ref).
-* `decomposition_alg::Union{NamedTuple,<:SVDAdjoint,<:EighAdjoint,<:QRAdjoint}` : Tensor
-  decomposition algorithm used for computing projectors. When specified as a `NamedTuple`,
-  the settings are passed a the forward algorithm to the appropriate decomposition
-  for the given projector algorithm. For information on which forward algorithms are
-  available, and how to specify them, see [`SVDAdjoint`](@ref), [`EighAdjoint`](@ref) and [`QRAdjoint`](@ref).
+* `decomposition_alg::Union{NamedTuple,<:SVDAdjoint,<:EighAdjoint,<:OrthAdjoint}` : Tensor decomposition algorithm used for computing projectors.
+  When specified as a `NamedTuple`, the settings are passed as the forward algorithm to the appropriate decomposition for the given projector algorithm.
+  For information on which forward algorithms are available, and how to specify them, see [`SVDAdjoint`](@ref), [`EighAdjoint`](@ref) and [`OrthAdjoint`](@ref).
 
 ## Return values
 
@@ -225,16 +223,38 @@ Spectra of the tensors that [`convergence_tensors`](@ref) selects.
 """
 function convergence_spectra(env::Union{CTMRGEnv, SplitCTMRGEnv}, alg)
     corners, edges = convergence_tensors(env, alg)
-    return map(C -> corner_spectrum(C, alg), corners), map(T -> edge_spectrum(T, alg), edges)
+    return corner_spectra(corners, alg), edge_spectra(edges, alg)
 end
 
 """
-    corner_spectrum(C, alg)
-    edge_spectrum(T, alg)
+    corner_spectra(Cs, alg)
 
-The spectrum of a corner or edge, used to measure CTMRG convergence.
+Spectra of a whole collection of corners. The default
+behaviour of computing a mapped `svd_vals` of each corner
+can be overridden on backends that benefit from batching these calls.
+"""
+corner_spectra(Cs, alg) = map(C -> corner_spectrum(C, alg), Cs)
+
+"""
+    edge_spectra(Ts, alg)
+
+Spectra of a whole collection of edges. The default
+behaviour of computing a mapped `svd_vals` of each edge
+can be overridden on backends that benefit from batching these calls.
+"""
+edge_spectra(Ts, alg) = map(T -> edge_spectrum(T, alg), Ts)
+
+"""
+    corner_spectrum(C, alg)
+
+The spectrum of a corner, used to measure CTMRG convergence.
 """
 corner_spectrum(C, alg) = svd_vals(C)
+"""
+    edge_spectrum(T, alg)
+
+The spectrum of an edge, used to measure CTMRG convergence.
+"""
 edge_spectrum(T, alg) = svd_vals(T)
 
 function calc_convergence(env, CS_old, TS_old, alg)
