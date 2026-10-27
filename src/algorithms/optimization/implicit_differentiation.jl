@@ -244,7 +244,11 @@ function _rrule(
         Δenv = unthunk(Δenv′)
 
         # evaluate the geometric sum
-        ∂F∂env = fixedpoint_gradient(Δenv, ∂f∂x, ∂f∂A, Δenv, gradmode.solver_alg)
+        ∂F∂env = if gradmode.solver_alg isa Union{GeomSum, ManualIter}
+            fixedpoint_gradient(Δenv, ∂f∂x, ∂f∂A, Δenv, gradmode.solver_alg; vjp = env_vjp)
+        else
+            fixedpoint_gradient(Δenv, ∂f∂x, ∂f∂A, Δenv, gradmode.solver_alg)
+        end
 
         return NoTangent(), ZeroTangent(), ∂F∂env, NoTangent()
     end
@@ -278,18 +282,26 @@ This can be used to differentiate contraction routines, where ``p`` are the vari
 parameters of a tensor network, ``x̆ = ∂ₓE`` is the partial
 derivative of the cost function with respect to the contraction environment ``x``, and ``f``
 is a single iteration of the contraction algorithm.
+
+For `GeomSum` and `ManualIter`, the optional `vjp` keyword supplies both partial derivatives as `(NoTangent(), parameter_cotangent, environment_cotangent)` to avoid evaluating the same reverse pass twice.
 """
 fixedpoint_gradient
 
-# TODO: can we construct an implementation that does not need to evaluate the vjp
-# twice if both ∂f∂A and ∂f∂x are needed?
-function fixedpoint_gradient(∂E∂x, ∂f∂x, ∂f∂A, _, alg::GeomSum)
+function fixedpoint_gradient(∂E∂x, ∂f∂x, ∂f∂A, _, alg::GeomSum; vjp = nothing)
     g = ∂E∂x
-    dx = ∂f∂A(g) # n = 0 term: ∂F∂x ∂f∂A
+    if isnothing(vjp)
+        dx = ∂f∂A(g) # n = 0 term: ∂F∂x ∂f∂A
+    else
+        _, dx, g = vjp(g)
+    end
     ϵ = 2 * alg.tol
     for i in 1:(alg.maxiter)
-        g = ∂f∂x(g)
-        Σₙ = ∂f∂A(g)
+        if isnothing(vjp)
+            g = ∂f∂x(g)
+            Σₙ = ∂f∂A(g)
+        else
+            _, Σₙ, g = vjp(g)
+        end
         dx += Σₙ
         ϵnew = norm(Σₙ)  # TODO: normalize this error?
         Δϵ = ϵ - ϵnew
@@ -305,14 +317,24 @@ function fixedpoint_gradient(∂E∂x, ∂f∂x, ∂f∂A, _, alg::GeomSum)
     return dx
 end
 
-function fixedpoint_gradient(∂E∂x, ∂f∂x, ∂f∂A, y₀, alg::ManualIter)
+function fixedpoint_gradient(∂E∂x, ∂f∂x, ∂f∂A, y₀, alg::ManualIter; vjp = nothing)
     y = deepcopy(y₀)  # Do not mutate y₀
-    dx = ∂f∂A(y)
+    dx, dy = if isnothing(vjp)
+        ∂f∂A(y), nothing
+    else
+        _, dx₀, dy₀ = vjp(y)
+        dx₀, dy₀
+    end
     ϵ = 1.0
     for i in 1:(alg.maxiter)
-        y′ = ∂E∂x + ∂f∂x(y)
+        y′ = ∂E∂x + (isnothing(vjp) ? ∂f∂x(y) : dy)
 
-        dxnew = ∂f∂A(y′)
+        dxnew, dy = if isnothing(vjp)
+            ∂f∂A(y′), nothing
+        else
+            _, dx′, dy′ = vjp(y′)
+            dx′, dy′
+        end
         ϵnew = norm(dxnew - dx)
         Δϵ = ϵ - ϵnew
         alg.verbosity > 1 && @printf(
